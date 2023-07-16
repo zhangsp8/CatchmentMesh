@@ -160,6 +160,11 @@ CONTAINS
 
             IF (ndone == p_nwork) exit
          ENDDO
+         
+         allocate (bsn_info_num_hru (ntotalcat))
+         DO icat = 1, ntotalcat
+            bsn_info_num_hru(icat) = count(hru_info_indx(:,catnum) >= 0)
+         ENDDO
 
          DO icat = 1, ntotalcat
             DO inb = 1, bsn_nbr(icat)%nnb

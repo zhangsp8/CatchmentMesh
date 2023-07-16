@@ -265,6 +265,7 @@ CONTAINS
          call ncio_write_serial (filename, 'river_length',    riv_info_len, 'catchment', compress = 1)
          call ncio_write_serial (filename, 'river_elevation', riv_info_elv, 'catchment', compress = 1)
 
+         call ncio_write_serial (filename, 'basin_numhru', bsn_info_num_hru, 'catchment', compress = 1)
          call ncio_write_serial (filename, 'basin_downstream', bsn_info_downstream, 'catchment', compress = 1)
          call ncio_write_serial (filename, 'basin_num_neighbour', bsn_info_num_nbr, 'catchment', compress = 1)
          call ncio_write_serial (filename, 'basin_idx_neighbour', bsn_info_idx_nbr, &

@@ -69,6 +69,7 @@ module hydro_data_mod
    ! basin information
    integer (kind=4) :: ntotalcat
    integer (kind=4), allocatable :: bsn_info_bnds     (:,:) 
+   integer (kind=4), allocatable :: bsn_info_num_hru    (:)    
    integer (kind=4), allocatable :: bsn_info_downstream (:) 
    integer (kind=4), allocatable :: bsn_info_num_nbr    (:)    
    integer (kind=4), allocatable :: bsn_info_idx_nbr  (:,:)    
@@ -1234,6 +1235,7 @@ contains
       IF (allocated (hru_info_lfac))   deallocate (hru_info_lfac)
 
       IF (allocated (bsn_info_bnds      )) deallocate (bsn_info_bnds      )
+      IF (allocated (bsn_info_num_hru   )) deallocate (bsn_info_num_hru   )
       IF (allocated (bsn_info_downstream)) deallocate (bsn_info_downstream)
       IF (allocated (bsn_info_num_nbr   )) deallocate (bsn_info_num_nbr   )
       IF (allocated (bsn_info_idx_nbr   )) deallocate (bsn_info_idx_nbr   )
