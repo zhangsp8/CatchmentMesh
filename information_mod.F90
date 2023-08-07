@@ -41,6 +41,8 @@ CONTAINS
       real    (kind=4), allocatable :: lfachu (:)
       LOGICAL, allocatable :: mask (:)
 
+      real    (kind=4) :: elvacat
+
       integer (kind=4), allocatable :: route (:,:)    
       real    (kind=4), allocatable :: hdnxt (:,:)
       real    (kind=4), allocatable :: plen2 (:,:)
@@ -81,6 +83,8 @@ CONTAINS
          allocate (hru_info_plen (maxhunum,ntotalcat))
          allocate (hru_info_lfac (maxhunum,ntotalcat))
 
+         allocate (bsn_info_elva (ntotalcat))
+
          hru_info_indx = -1
          hru_info_area = 0
          hru_info_next = -1
@@ -120,6 +124,8 @@ CONTAINS
                   CALL mpi_recv (plenhu(1:nurecv), nurecv, MPI_REAL4,   iwork, 1, p_comm_work, p_stat, p_err)
                   CALL mpi_recv (lfachu(1:nurecv), nurecv, MPI_REAL4,   iwork, 1, p_comm_work, p_stat, p_err)
                ENDIF
+                  
+               CALL mpi_recv (bsn_info_elva(catnum), 1, MPI_REAL4, iwork, 1, p_comm_work, p_stat, p_err)
 
                CALL mpi_recv (nnb, 1, MPI_INTEGER, iwork, 1, p_comm_work, p_stat, p_err)
                bsn_nbr(catnum)%nnb = nnb
@@ -140,6 +146,7 @@ CONTAINS
                   hru_info_plen(1:nurecv,catnum) = plenhu(1:nurecv)
                   hru_info_lfac(1:nurecv,catnum) = lfachu(1:nurecv)
                ENDIF
+
             ENDIF
 
             IF (icat <= ntotalcat) THEN
@@ -171,49 +178,55 @@ CONTAINS
 
                jcat = bsn_nbr(icat)%nbr_index(inb)
 
-               IF (bsn_nbr(jcat)%nnb > 0) THEN
+               IF (jcat > 0) THEN
+                  IF (bsn_nbr(jcat)%nnb > 0) THEN
 
-                  i_in_j = findloc(bsn_nbr(jcat)%nbr_index, icat, dim=1)
+                     i_in_j = findloc(bsn_nbr(jcat)%nbr_index, icat, dim=1)
 
-                  IF (i_in_j <= 0) THEN
-                     allocate(idxtmp(bsn_nbr(jcat)%nnb))
-                     allocate(lentmp(bsn_nbr(jcat)%nnb))
-                     idxtmp = bsn_nbr(jcat)%nbr_index
-                     lentmp = bsn_nbr(jcat)%lenborder
+                     IF (i_in_j <= 0) THEN
+                        allocate(idxtmp(bsn_nbr(jcat)%nnb))
+                        allocate(lentmp(bsn_nbr(jcat)%nnb))
+                        idxtmp = bsn_nbr(jcat)%nbr_index
+                        lentmp = bsn_nbr(jcat)%lenborder
 
-                     deallocate(bsn_nbr(jcat)%nbr_index)
-                     deallocate(bsn_nbr(jcat)%lenborder)
+                        deallocate(bsn_nbr(jcat)%nbr_index)
+                        deallocate(bsn_nbr(jcat)%lenborder)
 
-                     bsn_nbr(jcat)%nnb = bsn_nbr(jcat)%nnb + 1
-                     allocate(bsn_nbr(jcat)%nbr_index (bsn_nbr(jcat)%nnb))
-                     allocate(bsn_nbr(jcat)%lenborder (bsn_nbr(jcat)%nnb))
+                        bsn_nbr(jcat)%nnb = bsn_nbr(jcat)%nnb + 1
+                        allocate(bsn_nbr(jcat)%nbr_index (bsn_nbr(jcat)%nnb))
+                        allocate(bsn_nbr(jcat)%lenborder (bsn_nbr(jcat)%nnb))
 
-                     bsn_nbr(jcat)%nbr_index(1:bsn_nbr(jcat)%nnb-1) = idxtmp 
-                     bsn_nbr(jcat)%lenborder(1:bsn_nbr(jcat)%nnb-1) = lentmp 
-                     bsn_nbr(jcat)%nbr_index(bsn_nbr(jcat)%nnb)   = icat
-                     bsn_nbr(jcat)%lenborder(bsn_nbr(jcat)%nnb)   = 0 
+                        bsn_nbr(jcat)%nbr_index(1:bsn_nbr(jcat)%nnb-1) = idxtmp 
+                        bsn_nbr(jcat)%lenborder(1:bsn_nbr(jcat)%nnb-1) = lentmp 
+                        bsn_nbr(jcat)%nbr_index(bsn_nbr(jcat)%nnb)   = icat
+                        bsn_nbr(jcat)%lenborder(bsn_nbr(jcat)%nnb)   = 0 
 
-                     i_in_j = bsn_nbr(jcat)%nnb
-                     maxnnb = max(maxnnb, bsn_nbr(jcat)%nnb)
+                        i_in_j = bsn_nbr(jcat)%nnb
+                        maxnnb = max(maxnnb, bsn_nbr(jcat)%nnb)
 
-                     deallocate(idxtmp)
-                     deallocate(lentmp)
+                        deallocate(idxtmp)
+                        deallocate(lentmp)
+                     ENDIF
+                  ELSE
+                     bsn_nbr(jcat)%nnb = 1
+                     allocate (bsn_nbr(jcat)%nbr_index(1))
+                     allocate (bsn_nbr(jcat)%lenborder(1))
+                     i_in_j = 1
+                     bsn_nbr(jcat)%nbr_index(1) = icat
+                     bsn_nbr(jcat)%lenborder(1) = 0
                   ENDIF
+
+                  write(*,'(A,I7,A,I7,A,E20.4,A,E20.4,A)') '(S4) Basin Pair: (', icat, ',', jcat, ')', &
+                     bsn_nbr(icat)%lenborder(inb), '(->)', bsn_nbr(jcat)%lenborder(i_in_j), '(<-)'
+
+                  bsn_nbr(icat)%lenborder(inb) = &
+                     (bsn_nbr(icat)%lenborder(inb) + bsn_nbr(jcat)%lenborder(i_in_j)) * 0.5
+                  bsn_nbr(jcat)%lenborder(i_in_j) = bsn_nbr(icat)%lenborder(inb)
+
                ELSE
-                  bsn_nbr(jcat)%nnb = 1
-                  allocate (bsn_nbr(jcat)%nbr_index(1))
-                  allocate (bsn_nbr(jcat)%lenborder(1))
-                  i_in_j = 1
-                  bsn_nbr(jcat)%nbr_index(1) = icat
-                  bsn_nbr(jcat)%lenborder(1) = 0
+                  write(*,'(A,I7,A,I7,A,E20.4,A)') '(S4) Basin to Ocean : (', icat, ',', jcat, ')', &
+                     bsn_nbr(icat)%lenborder(inb), '(->)'
                ENDIF
-
-               write(*,'(A,I7,A,I7,A,E20.4,A,E20.4,A)') '(S4) Basin Pair: (', icat, ',', jcat, ')', &
-                  bsn_nbr(icat)%lenborder(inb), '(->)', bsn_nbr(jcat)%lenborder(i_in_j), '(<-)'
-
-               bsn_nbr(icat)%lenborder(inb) = &
-                  (bsn_nbr(icat)%lenborder(inb) + bsn_nbr(jcat)%lenborder(i_in_j)) * 0.5
-               bsn_nbr(jcat)%lenborder(i_in_j) = bsn_nbr(icat)%lenborder(inb)
 
             ENDDO
          ENDDO
@@ -338,6 +351,7 @@ CONTAINS
                         areahu(unum) = areahu(unum) + get_area (i+imin-1,jlon)
 
                         elvahu(unum) = elvahu(unum) + elv(i,j)
+                        handhu(unum) = handhu(unum) + hnd(i,j)
 
                         IF (unum > 0) THEN
 
@@ -370,11 +384,8 @@ CONTAINS
 
                                  IF ((hunit(inext,jnext) /= unum) .or. (.not. hmask(inext,jnext))) THEN
                                     plen2(route(1,inode),route(2,inode)) = dist
-                                    hdnxt(route(1,inode),route(2,inode)) = hnd(inext,jnext)
                                  ELSE
-                                    plen2(route(1,inode),route(2,inode)) = plen2(inext,jnext) &
-                                       + dist
-                                    hdnxt(route(1,inode),route(2,inode)) = hdnxt(inext,jnext)
+                                    plen2(route(1,inode),route(2,inode)) = plen2(inext,jnext) + dist
                                  ENDIF
 
                                  inext = route(1,inode)
@@ -382,7 +393,6 @@ CONTAINS
                               end do
                            ENDIF
 
-                           handhu(unum) = handhu(unum) + hnd(i,j) - hdnxt(i,j)
                            plenhu(unum) = plenhu(unum) + plen2(i,j)
 
                            CALL nextij (i, j, dir(i,j), inext, jnext)
@@ -426,6 +436,8 @@ CONTAINS
 
             ENDIF
 
+            elvacat = sum(elv, mask = hmask) / count(hmask)
+
             CALL get_basin_neighbour (catnum, imin, jmin, np, mp, catch, &
                nnb, nbindex, lenborder)
 
@@ -465,6 +477,8 @@ CONTAINS
                call mpi_send (datar(1:nusend), nusend, MPI_REAL4, 0, 1, p_comm_work, p_err) 
 
             ENDIF
+               
+            call mpi_send (elvacat, 1, MPI_REAL4, 0, 1, p_comm_work, p_err) 
 
             call mpi_send (nnb, 1, MPI_INTEGER, 0, 1, p_comm_work, p_err) 
             IF (nnb > 0) THEN

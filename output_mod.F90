@@ -236,6 +236,9 @@ CONTAINS
 
       IF (p_is_master) THEN
 
+         allocate (riv_info_dep (ntotalcat))
+         riv_info_dep(:) = 40.
+
          filename = trim(output_dir) // '/' // trim(casename) // '.nc'
          if (trim(storage_type) == 'block') then
             CALL ncio_create_file (filename)
@@ -244,6 +247,7 @@ CONTAINS
          CALL ncio_define_dimension (filename, 'catchment', ntotalcat)
          CALL ncio_define_dimension (filename, 'hydrounit', maxhunum)
          CALL ncio_define_dimension (filename, 'neighbour', maxnnb)
+         CALL ncio_define_dimension (filename, 'ncds', 2)
          
          call ncio_write_serial (filename, 'lake_id', lake_info_id, 'catchment', compress = 1)
 
@@ -262,8 +266,12 @@ CONTAINS
          call ncio_write_serial (filename, 'hydrounit_facelen', hru_info_lfac, &
             'hydrounit', 'catchment', compress = 1)
 
-         call ncio_write_serial (filename, 'river_length',    riv_info_len, 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'river_elevation', riv_info_elv, 'catchment', compress = 1)
+         call ncio_write_serial (filename, 'river_length',      riv_info_len, 'catchment', compress = 1)
+         call ncio_write_serial (filename, 'river_elevation',   riv_info_elv, 'catchment', compress = 1)
+         call ncio_write_serial (filename, 'river_depth',       riv_info_dep, 'catchment', compress = 1)
+
+         call ncio_write_serial (filename, 'river_pixel_start', riv_info_stt, 'ncds', 'catchment', compress = 1)
+         call ncio_write_serial (filename, 'river_pixel_end',   riv_info_end, 'ncds', 'catchment', compress = 1)
 
          call ncio_write_serial (filename, 'basin_numhru', bsn_info_num_hru, 'catchment', compress = 1)
          call ncio_write_serial (filename, 'basin_downstream', bsn_info_downstream, 'catchment', compress = 1)
@@ -272,6 +280,7 @@ CONTAINS
             'neighbour', 'catchment', compress = 1)
          call ncio_write_serial (filename, 'basin_len_border', bsn_info_len_bdr, &
             'neighbour', 'catchment', compress = 1)
+         call ncio_write_serial (filename, 'basin_elevation', bsn_info_elva, 'catchment', compress = 1)
 
       ENDIF
 

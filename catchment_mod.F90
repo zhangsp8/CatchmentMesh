@@ -64,6 +64,9 @@ CONTAINS
 
          ncat = riv_info_pix (3,nrivpix)
 
+         allocate (riv_info_stt(2,ncat))
+         allocate (riv_info_end(2,ncat))
+
          cdsp = 0
          do iproc = 1, p_nwork
             ncat_work = ncat / p_nwork
@@ -78,6 +81,7 @@ CONTAINS
                irivseg = 0
                do while (head < nrivpix)
                   head = head + 1
+                  riv_info_stt(:,riv_info_pix(3,head)) = riv_info_pix(1:2,head)
                   do while (head < nrivpix)
                      if (riv_info_pix(3,head+1) == riv_info_pix(3,head)) then
                         head = head + 1
@@ -85,6 +89,7 @@ CONTAINS
                         exit
                      end if
                   end do
+                  riv_info_end(:,riv_info_pix(3,head)) = riv_info_pix(1:2,head)
 
                   irivseg = irivseg + 1
                   if (irivseg == ncat_work) exit
@@ -903,7 +908,7 @@ CONTAINS
       ! Local Variables
       INTEGER :: inb
 
-      IF (jcat <= 0) RETURN
+      IF ((jcat <= 0) .and. (jcat /= -9)) RETURN
 
       IF (jcat == icat) THEN
          write(*,*) 'Warning: border finding error.'

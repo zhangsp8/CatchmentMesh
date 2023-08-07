@@ -56,6 +56,9 @@ module hydro_data_mod
    integer (kind=4), allocatable :: riv_info_pix (:,:)
    real    (kind=4), allocatable :: riv_info_len (:)
    real    (kind=4), allocatable :: riv_info_elv (:)
+   real    (kind=4), allocatable :: riv_info_dep (:)
+   integer (kind=4), allocatable :: riv_info_stt (:,:)
+   integer (kind=4), allocatable :: riv_info_end (:,:)
 
    ! hydrounit information
    integer (kind=4), allocatable :: hru_info_indx (:,:)    
@@ -74,6 +77,7 @@ module hydro_data_mod
    integer (kind=4), allocatable :: bsn_info_num_nbr    (:)    
    integer (kind=4), allocatable :: bsn_info_idx_nbr  (:,:)    
    real    (kind=4), allocatable :: bsn_info_len_bdr  (:,:)
+   real    (kind=4), allocatable :: bsn_info_elva       (:)
 
    ! lake information
    integer (kind=4), allocatable :: lake_info_id (:)    
@@ -1225,6 +1229,9 @@ contains
       if (allocated (riv_info_pix)) deallocate (riv_info_pix)
       IF (allocated (riv_info_len)) deallocate (riv_info_len)
       IF (allocated (riv_info_elv)) deallocate (riv_info_elv)
+      IF (allocated (riv_info_dep)) deallocate (riv_info_dep)
+      if (allocated (riv_info_stt)) deallocate (riv_info_stt)
+      if (allocated (riv_info_end)) deallocate (riv_info_end)
       
       IF (allocated (hru_info_indx))   deallocate (hru_info_indx)
       IF (allocated (hru_info_area))   deallocate (hru_info_area)
@@ -1240,6 +1247,7 @@ contains
       IF (allocated (bsn_info_num_nbr   )) deallocate (bsn_info_num_nbr   )
       IF (allocated (bsn_info_idx_nbr   )) deallocate (bsn_info_idx_nbr   )
       IF (allocated (bsn_info_len_bdr   )) deallocate (bsn_info_len_bdr   )
+      IF (allocated (bsn_info_elva      )) deallocate (bsn_info_elva      )
       
       IF (allocated (lake_info_id)) deallocate (lake_info_id)
 
