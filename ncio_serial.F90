@@ -249,6 +249,26 @@ CONTAINS
 
    END SUBROUTINE ncio_define_dimension
 
+   ! ----
+   SUBROUTINE ncio_put_attr_str (filename, varname, attrname, attrval)
+
+   USE netcdf
+   IMPLICIT NONE
+
+   character(len=*), intent(in)  :: filename, varname, attrname, attrval
+
+   ! Local Variables
+   integer :: ncid, varid
+
+      CALL nccheck( nf90_open (trim(filename), NF90_WRITE, ncid) )
+      CALL nccheck (nf90_inq_varid (ncid, trim(varname), varid))
+      CALL nccheck (nf90_redef (ncid))
+      CALL nccheck (nf90_put_att (ncid, varid, trim(attrname), trim(attrval)))
+      CALL nccheck (nf90_enddef (ncid))
+      CALL nccheck( nf90_close (ncid))
+
+   END SUBROUTINE ncio_put_attr_str
+
    !---------------------------------------------------------
    SUBROUTINE ncio_write_serial_int32_0d (filename, dataname, wdata)
 

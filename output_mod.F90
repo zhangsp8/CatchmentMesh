@@ -170,10 +170,16 @@ CONTAINS
             nlat = isouth - inorth + 1
             nlon = jeast - jwest + 1
             IF (nlon < 0) nlon = nlon + mglb
-            CALL ncio_define_dimension (filename, 'latitude',  nlat)
+            CALL ncio_define_dimension (filename, 'latitude', nlat)
             CALL ncio_define_dimension (filename, 'longitude', nlon)
-            call ncio_write_serial (filename, 'latitude',  latitude,  'latitude')
+            call ncio_write_serial (filename, 'latitude', latitude,  'latitude')
             call ncio_write_serial (filename, 'longitude', longitude, 'longitude')
+            
+            CALL ncio_put_attr_str (filename, 'latitude', 'long_name', 'latitude')
+            CALL ncio_put_attr_str (filename, 'latitude', 'units', 'degrees_north')
+            CALL ncio_put_attr_str (filename, 'longitude', 'long_name', 'longitude')
+            CALL ncio_put_attr_str (filename, 'longitude', 'units', 'degrees_east')
+
 
             call ncio_write_serial (filename, 'icatchment2d', catch, 'latitude', 'longitude', compress = 1)
             call ncio_write_serial (filename, 'hand',   hnd  , 'latitude', 'longitude', compress = 1)
@@ -275,10 +281,10 @@ CONTAINS
 
          call ncio_write_serial (filename, 'basin_numhru', bsn_info_num_hru, 'catchment', compress = 1)
          call ncio_write_serial (filename, 'basin_downstream', bsn_info_downstream, 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'basin_num_neighbour', bsn_info_num_nbr, 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'basin_idx_neighbour', bsn_info_idx_nbr, &
+         call ncio_write_serial (filename, 'num_neighbour', bsn_info_num_nbr, 'catchment', compress = 1)
+         call ncio_write_serial (filename, 'idx_neighbour', bsn_info_idx_nbr, &
             'neighbour', 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'basin_len_border', bsn_info_len_bdr, &
+         call ncio_write_serial (filename, 'len_border', bsn_info_len_bdr, &
             'neighbour', 'catchment', compress = 1)
          call ncio_write_serial (filename, 'basin_elevation', bsn_info_elva, 'catchment', compress = 1)
 

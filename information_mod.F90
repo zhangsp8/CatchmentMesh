@@ -219,8 +219,16 @@ CONTAINS
                   write(*,'(A,I7,A,I7,A,E20.4,A,E20.4,A)') '(S4) Basin Pair: (', icat, ',', jcat, ')', &
                      bsn_nbr(icat)%lenborder(inb), '(->)', bsn_nbr(jcat)%lenborder(i_in_j), '(<-)'
 
+                  IF (abs(bsn_nbr(icat)%lenborder(inb)-bsn_nbr(jcat)%lenborder(i_in_j)) &
+                     > 0.1 * max(bsn_nbr(icat)%lenborder(inb),bsn_nbr(jcat)%lenborder(i_in_j))) THEN
+                     write(*,'(A,I7,A,I7,A,E20.4,A,E20.4,A)') '(S4) Border mismatch between : (', &
+                        icat, ',', jcat, ')', &
+                        bsn_nbr(icat)%lenborder(inb), '(->)', bsn_nbr(jcat)%lenborder(i_in_j), '(<-)'
+                  ENDIF
+
                   bsn_nbr(icat)%lenborder(inb) = &
-                     (bsn_nbr(icat)%lenborder(inb) + bsn_nbr(jcat)%lenborder(i_in_j)) * 0.5
+                     max(bsn_nbr(icat)%lenborder(inb), bsn_nbr(jcat)%lenborder(i_in_j))
+
                   bsn_nbr(jcat)%lenborder(i_in_j) = bsn_nbr(icat)%lenborder(inb)
 
                ELSE
@@ -435,6 +443,8 @@ CONTAINS
                endwhere 
 
             ENDIF
+
+            IF (count(hmask) <= 0) write(*,*) catnum, lakeid, imin, imax, jmin, jmax
 
             elvacat = sum(elv, mask = hmask) / count(hmask)
 

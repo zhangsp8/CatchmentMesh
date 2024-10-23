@@ -2,7 +2,7 @@ MODULE hillslope_mod
 
 CONTAINS
 
-   subroutine get_hillslope_hydrounits (catsize, nlev_max, maxhunum)
+   subroutine get_hillslope_hydrounits (catsize, lakecellsize, nlev_max, maxhunum)
 
       use task_mod
       USE utils_mod
@@ -11,6 +11,7 @@ CONTAINS
       implicit none
 
       real    (kind=4), intent(in)  :: catsize
+      real    (kind=4), intent(in)  :: lakecellsize
       integer (kind=4), intent(in)  :: nlev_max
       integer (kind=4), intent(out) :: maxhunum
 
@@ -156,7 +157,7 @@ CONTAINS
                   call divide_hillslope_into_hydrounits ( lakeid, &
                      np, mp, dir, hnd, area, hmask, levsize, hunit) 
                ELSE
-                  CALL divide_lake (lakeid, np, mp, area, hmask, levsize, hunit)
+                  CALL divide_lake (lakeid, np, mp, area, hmask, lakecellsize, hunit)
                ENDIF
             end if
 
@@ -621,7 +622,7 @@ CONTAINS
 
    end subroutine divide_hillslope_into_hydrounits
 
-   SUBROUTINE divide_lake (lakeid, np, mp, area, hmask, levsize, hunit)
+   SUBROUTINE divide_lake (lakeid, np, mp, area, hmask, lakecellsize, hunit)
 
       USE cvt_mod
       IMPLICIT NONE
@@ -629,7 +630,7 @@ CONTAINS
       integer :: lakeid
 
       integer(kind=4), intent(in) :: np, mp
-      real   (kind=4), intent(in) :: area (np,mp), levsize
+      real   (kind=4), intent(in) :: area (np,mp), lakecellsize
       logical,         intent(in) :: hmask(np,mp)
 
       integer(kind=4), intent(inout) :: hunit(np,mp)    
@@ -643,7 +644,7 @@ CONTAINS
 
       nplake   = count(hmask)
       lakearea = sum(area, mask = hmask)
-      nlakeelm = max(nint(lakearea/levsize), 1)
+      nlakeelm = max(nint(lakearea/lakecellsize), 1)
 
       allocate (samplepoints(2,nplake))
 

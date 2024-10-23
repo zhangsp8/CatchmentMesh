@@ -421,6 +421,36 @@ contains
 
    end function is_feasible_step
 
+   !----------------------------------------------
+   logical function within_region (i, j) 
+
+      implicit none
+
+      integer (kind=4), intent(in) :: i, j
+
+      within_region = .true.
+
+      if ((i < inorth) .or. (i > isouth)) then
+         within_region = .false.
+         return
+      end if
+
+      if (jwest /= 0) then
+         if (jwest < jeast) then
+            if ((j < jwest) .or. (j > jeast)) then
+               within_region = .false.
+               return
+            end if
+         else
+            if ((j < jwest) .and. (j > jeast)) then
+               within_region = .false.
+               return
+            end if
+         end if
+      end if
+
+   end function within_region 
+
    !---------------------------------------------
    subroutine block_iterator ( & 
          imin, imax, jmin, jmax, iblk, jblk, &
@@ -1129,6 +1159,11 @@ contains
             do inode = 1, nnode
                i = route(1,inode) - blks(iblk,jblk)%idsp
                j = route(2,inode) - blks(iblk,jblk)%jdsp
+               IF ((blks(iblk,jblk)%icat (i,j) /= 0) &
+                  .and. (blks(iblk,jblk)%icat (i,j) /= icatch)) THEN
+                  write(*,*) blks(iblk,jblk)%icat(i,j), icatch
+                  STOP
+               ENDIF
                blks(iblk,jblk)%icat (i,j) = icatch
                blks(iblk,jblk)%hnd  (i,j) = elvdata(inode)
             end do
@@ -1256,21 +1291,24 @@ contains
    end subroutine free_memory
    
    !----------------------------------
-   subroutine append_plist (plist, ilist, i, j)
+   subroutine append_plist (plist, ilist, i, j, check_exist)
       implicit none
 
       integer (kind=4), allocatable, intent(inout) :: plist(:,:)
       integer (kind=4), intent(inout) :: ilist
       integer (kind=4), intent(in)    :: i, j
+      logical, intent(in) :: check_exist
 
       integer (kind=4) :: il, nlist
       integer (kind=4), allocatable :: temp(:,:)
 
-      ! DO il = 1, ilist
-      !    IF ((plist(1,il) == i) .and. (plist(2,il) == j)) THEN
-      !       RETURN
-      !    ENDIF
-      ! ENDDO
+      IF (check_exist) THEN
+         DO il = 1, ilist
+            IF ((plist(1,il) == i) .and. (plist(2,il) == j)) THEN
+               RETURN
+            ENDIF
+         ENDDO
+      ENDIF
 
       ilist = ilist + 1
 
@@ -1304,7 +1342,7 @@ contains
       real    (kind=4), allocatable, intent(inout) :: vlist(:)
       real    (kind=4), intent(in) :: val
 
-      integer (kind=4) :: listsize
+      integer (kind=4) :: listsize, lz
       integer (kind=4), allocatable :: temp(:,:)
       real    (kind=4), allocatable :: vtmp(:)
 
@@ -1317,19 +1355,23 @@ contains
 
       listsize = size(plist,2)
       if (ilist > listsize) then
+         lz = max(listsize+10, ceiling(1.2*real(listsize)))
          allocate (temp (2,listsize))
          temp = plist
          deallocate (plist)
-         allocate (plist (2,ceiling(1.2*listsize)))
+         allocate (plist (2,lz))
          plist (:,1:listsize) = temp
+         deallocate (temp)
+      ENDIF
          
+      listsize = size(vlist)
+      if (ilist > listsize) then
+         lz = max(listsize+10, ceiling(1.2*real(listsize)))
          allocate (vtmp (listsize))
          vtmp = vlist
          deallocate (vlist)
-         allocate (vlist (ceiling(1.2*listsize)))
+         allocate (vlist (lz))
          vlist(1:listsize) = vtmp(1:listsize)
-
-         deallocate (temp)
          deallocate (vtmp)
       end if
 

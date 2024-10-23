@@ -61,20 +61,15 @@ PROGRAM get_rivermouth
             if (bkid(iblk,jblk) == p_iam_glb) then
                do j = 1, mbox
                   do i = 1, nbox
-                     i_up = blks(iblk,jblk)%idsp + i
-                     j_up = blks(iblk,jblk)%jdsp + j
-
                      if (blks(iblk,jblk)%icat(i,j) == 0) then
-                        call nextij (i_up, j_up, blks(iblk,jblk)%dir(i,j), i_dn, j_dn)
-                        if (.not. is_feasible_step(i_up,j_up,i_dn,j_dn)) then
-                           if (blks(iblk,jblk)%upa(i,j) > 0.) then
-                              call mpi_send (p_iam_glb, 1, MPI_INTEGER, 0, 0, p_comm_glb, p_err) 
-                              call mpi_send (i_up, 1, MPI_INTEGER, 0, 1, p_comm_glb, p_err) 
-                              call mpi_send (j_up, 1, MPI_INTEGER, 0, 1, p_comm_glb, p_err) 
-                              call mpi_send (blks(iblk,jblk)%upa(i,j), 1, MPI_REAL4, 0, 1, p_comm_glb, p_err) 
-                           else
-                              blks(iblk,jblk)%icat(i,j) = -1
-                           end if
+                        ! river mouth and inland depression.
+                        IF ((blks(iblk,jblk)%dir(i,j) == 0) .or. (blks(iblk,jblk)%dir(i,j) == -1)) THEN
+                           i_up = blks(iblk,jblk)%idsp + i
+                           j_up = blks(iblk,jblk)%jdsp + j
+                           call mpi_send (p_iam_glb, 1, MPI_INTEGER, 0, 0, p_comm_glb, p_err) 
+                           call mpi_send (i_up, 1, MPI_INTEGER, 0, 1, p_comm_glb, p_err) 
+                           call mpi_send (j_up, 1, MPI_INTEGER, 0, 1, p_comm_glb, p_err) 
+                           call mpi_send (blks(iblk,jblk)%upa(i,j), 1, MPI_REAL4, 0, 1, p_comm_glb, p_err) 
                         end if
                      end if
                   end do

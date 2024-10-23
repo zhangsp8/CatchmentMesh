@@ -41,7 +41,7 @@ CONTAINS
       integer (kind=4), allocatable :: lake_id  (:)
       integer (kind=4), allocatable :: bndinfo(:,:)
       
-      integer (kind=4) :: south, north, west, east
+      integer (kind=4) :: south, north, west, east, cdthis
       integer (kind=4), allocatable :: catdown(:)
       
       ! lake
@@ -219,7 +219,8 @@ CONTAINS
                            call nextij (pixellist(1,iplist), pixellist(2,iplist), &
                               ishftc(int(-128,1),idir), i_up, j_up)
 
-                           if (is_feasible_step(pixellist(1,iplist),pixellist(2,iplist),i_up,j_up)) then
+                           if (((pixellist(1,iplist) /= i_up) .or. (pixellist(2,iplist) /= j_up)) &
+                              .and. within_region(i_up,j_up)) THEN
                               if (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) then
                                  if (get_icat(i_up,j_up) == 0) then
                                     elv = get_elv(i_up, j_up)
@@ -257,7 +258,7 @@ CONTAINS
                   lakeid = get_lake(outlet(1), outlet(2))
 
                   nplake = 0
-                  CALL append_plist (lakepixels, nplake, outlet(1), outlet(2))
+                  CALL append_plist (lakepixels, nplake, outlet(1), outlet(2), check_exist = .false.)
 
                   iplake = 1
                   DO WHILE (iplake <= nplake)
@@ -265,7 +266,8 @@ CONTAINS
                         call nextij (lakepixels(1,iplake), lakepixels(2,iplake), &
                            ishftc(int(-128,1),idir), i_up, j_up)
 
-                        if (is_feasible_step(lakepixels(1,iplake),lakepixels(2,iplake),i_up,j_up)) then
+                        if (((lakepixels(1,iplake) /= i_up) .or. (lakepixels(2,iplake) /= j_up)) &
+                           .and. within_region(i_up,j_up)) THEN
                            if (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) then
                               if (get_lake(i_up,j_up) == lakeid) then
                                  call append_plist3 (lakepixels, nplake, i_up, j_up, elvdata, 0._4)
@@ -298,7 +300,8 @@ CONTAINS
                         call nextij (lakepixels(1,iplake), lakepixels(2,iplake), &
                            ishftc(int(-128,1),idir), i_up, j_up)
 
-                        if (is_feasible_step(lakepixels(1,iplake),lakepixels(2,iplake),i_up,j_up)) then
+                        if (((lakepixels(1,iplake) /= i_up) .or. (lakepixels(2,iplake) /= j_up)) &
+                           .and. within_region(i_up,j_up)) THEN
                            if (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) then
                               if (get_lake(i_up,j_up) /= lakeid) then
                                  IF (get_upa(i_up,j_up) < catsize) THEN
@@ -313,7 +316,7 @@ CONTAINS
                         idir = maxloc(upa_up, dim = 1)
                         call nextij (lakepixels(1,iplake), lakepixels(2,iplake), &
                            ishftc(int(-128,1),idir), i_up, j_up)
-                        call append_plist (smalllist, nsmallcat, i_up, j_up)
+                        call append_plist (smalllist, nsmallcat, i_up, j_up, check_exist = .false.)
                         upa_up(idir) = 0.
                      ENDDO
                                     
@@ -366,7 +369,8 @@ CONTAINS
                               call nextij (pixellist(1,iplist), pixellist(2,iplist), &
                                  ishftc(int(-128,1),idir), i_up, j_up)
 
-                              if (is_feasible_step(pixellist(1,iplist),pixellist(2,iplist),i_up,j_up)) then
+                              if (((pixellist(1,iplist) /= i_up) .or. (pixellist(2,iplist) /= j_up)) &
+                                 .and. within_region(i_up,j_up)) THEN
                                  if (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) then
                                     elv = get_elv(i_up, j_up)
                                     call append_plist3 (pixellist, nplist, i_up, j_up, elvdata, elv-elv0)
@@ -455,8 +459,7 @@ CONTAINS
 
                                  do idir = 1, 8
                                     call nextij (i, j, ishftc(int(-128,1),idir), i_up, j_up)
-                              
-                                    if (is_feasible_step(i,j,i_up,j_up)) then
+                                    if (((i /= i_up) .or. (j /= j_up)) .and. within_region(i_up,j_up)) THEN
                                        if (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) then
                                           IF (get_icat(i_up,j_up) == 0) THEN
                                              elv = get_elv(i_up, j_up)
@@ -635,21 +638,26 @@ CONTAINS
                   DO WHILE (.true.)
                      IF (get_icat(i,j) == catnum) THEN
                         dir_this = get_dir (i, j)
-                        ! 0: river mouth; -1: inland depression; -9: ocean;
-                        IF ((dir_this /= 0) .and. (dir_this /= -1) .and. (dir_this /= -9)) THEN
+                        ! 0: river mouth; -1: inland depression; 
+                        IF ((dir_this /= 0) .and. (dir_this /= -1)) THEN
                            CALL nextij (i, j, dir_this, i_dn, j_dn)
-                           IF (is_feasible_step(i,j,i_dn,j_dn)) then
-                              IF (get_icat(i_dn,j_dn) /= catnum) THEN
-                                 IF (catdown(icat) /= -9999) THEN
-                                    IF (get_icat(i_dn,j_dn) /= catdown(icat)) THEN
-                                       write(*,'(A,I7,A,I7,A,I7,A,I7,A)') &
-                                          'Warning: more than ONE downstream catchment : ',  &
-                                          cat_id(icat), ',', lake_id(icat), '(', catdown(icat), '->', &
-                                          get_icat(i_dn,j_dn), ')'
-                                    ENDIF
-                                 ELSE
-                                    catdown(icat) = get_icat(i_dn,j_dn)
+                           IF (within_region(i_dn,j_dn)) THEN
+                              cdthis = get_icat(i_dn,j_dn)
+                              IF (cdthis == 0) cdthis = -3 ! downstream is land, but not in the region.
+                           ELSE
+                              cdthis = -3
+                           ENDIF
+
+                           IF (cdthis /= catnum) THEN
+                              IF (catdown(icat) /= -9999) THEN
+                                 IF (cdthis /= catdown(icat)) THEN
+                                    write(*,'(A,I7,A,I7,A,I7,A,I7,A)') &
+                                       'Warning: more than ONE downstream catchment : ',  &
+                                       cat_id(icat), ',', lake_id(icat), '(', catdown(icat), '->', &
+                                       cdthis, ')'
                                  ENDIF
+                              ELSE
+                                 catdown(icat) = cdthis
                               ENDIF
                            ENDIF
                         ELSE
@@ -796,55 +804,89 @@ CONTAINS
       REAL    (kind = 4), allocatable, intent(out) :: lenborder(:)
 
       ! Local Variable
-      INTEGER :: npxl, istart, jstart, ithis, jthis, inext, jnext, idir
+      logical :: bmask(np,mp), cmask(np,mp), is_inside, is_alone
+      INTEGER :: ipxl, jpxl, istart, jstart, ithis, jthis, inext, jnext, idir
       INTEGER :: igthis, jgthis, ignext, jgnext
       REAL*4  :: blen
       INTEGER*1 :: sdir
 
-      IF (any(catch(1,:) == icat)) THEN
-         istart = 1
-         jstart = findloc(catch(1,:), icat, dim=1)
-      ELSE
-         istart = 2
-         jstart = findloc(catch(2,:), icat, dim=1)
-      ENDIF
-
-      npxl = count(catch == icat)
-
       nnb = 0
+      allocate (nbindex  (np*mp))
+      allocate (lenborder(np*mp))
+      lenborder(:) = 0
 
-      IF (npxl > 1) THEN
+      bmask = .false.
 
-         ithis = istart
-         jthis = jstart
+      DO ipxl = 1, np
 
-         allocate (nbindex  (np*mp-npxl))
-         allocate (lenborder(np*mp-npxl))
+         DO jpxl = 1, mp
+            
+            IF ((catch(ipxl,jpxl) /= icat) .or. bmask(ipxl,jpxl)) CYCLE
 
-         lenborder(:) = 0
-
-         sdir = int(64,1)
-
-         DO WHILE (.true.)
+            is_inside = .true.
+            is_alone  = .true.
+            sdir = int(64,1)
             do idir = 1, 8
-               call nextij (ithis, jthis, ishftc(sdir,idir), inext, jnext, is_local=.true.)
+               call nextij (ipxl, jpxl, ishftc(sdir,idir), inext, jnext, is_local=.true.)
                IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN
-                  IF (catch(inext,jnext) == icat) THEN
-                     exit
+                  IF (catch(inext,jnext) /= icat) THEN
+                     IF (mod(idir,2) == 0) THEN
+                        is_inside = .false.
+                     ENDIF
+                  ELSE
+                     is_alone = .false.
                   ENDIF
                ENDIF
             ENDDO
 
-            igthis = ithis + imin - 1
-            ignext = inext + imin - 1
-            jgthis = jthis + jmin - 1
-            IF (jgthis > mglb) jgthis = jgthis - mglb
-            jgnext = jnext + jmin - 1
-            IF (jgnext > mglb) jgnext = jgnext - mglb
+            IF (is_inside) CYCLE
+            IF (is_alone ) CYCLE
 
-            blen = dist_between (igthis, jgthis, ignext, jgnext)
+            cmask = .false.
+            cmask(ipxl,jpxl) = .true.
 
-            IF (abs(inext-ithis)+abs(jnext-jthis) == 2) THEN
+            istart = ipxl
+            jstart = jpxl
+
+            ithis = istart
+            jthis = jstart
+
+            sdir = int(64,1)
+            do idir = 1, 4
+               call nextij (ithis, jthis, sdir, inext, jnext, is_local=.true.)
+               IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN
+                  IF (catch(inext,jnext) /= icat) THEN
+                     exit
+                  ELSE
+                     sdir = ishftc(sdir,2)
+                  ENDIF
+               ELSE
+                  EXIT
+               ENDIF
+            ENDDO
+
+            DO WHILE (.true.)
+
+               do idir = 1, 8
+                  call nextij (ithis, jthis, ishftc(sdir,idir), inext, jnext, is_local=.true.)
+                  IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN
+                     IF (catch(inext,jnext) == icat) THEN
+                        exit
+                     ENDIF
+                  ENDIF
+               ENDDO
+            
+               cmask(inext,jnext) = .true.
+
+               igthis = ithis + imin - 1
+               ignext = inext + imin - 1
+               jgthis = jthis + jmin - 1
+               IF (jgthis > mglb) jgthis = jgthis - mglb
+               jgnext = jnext + jmin - 1
+               IF (jgnext > mglb) jgnext = jgnext - mglb
+
+               blen = dist_between (igthis, jgthis, ignext, jgnext)
+
                IF     ((inext == ithis+1) .and. (jnext == jthis+1)) THEN
                   CALL acc_border(icat, nnb, nbindex, catch(ithis,jnext), lenborder, blen)
                ELSEIF ((inext == ithis+1) .and. (jnext == jthis-1)) THEN
@@ -853,34 +895,36 @@ CONTAINS
                   CALL acc_border(icat, nnb, nbindex, catch(ithis,jnext), lenborder, blen)
                ELSEIF ((inext == ithis-1) .and. (jnext == jthis+1)) THEN
                   CALL acc_border(icat, nnb, nbindex, catch(inext,jthis), lenborder, blen)
-               ENDIF
-            ELSEIF (abs(inext-ithis)+abs(jnext-jthis) == 1) THEN
-               IF ((inext == ithis+1) .and. (jthis < mp)) THEN
+               ELSEIF ((inext == ithis+1) .and. (jnext == jthis) .and. (jthis < mp)) THEN
                   CALL acc_border(icat, nnb, nbindex, catch(ithis,jthis+1), lenborder, blen/2.0_4)
                   CALL acc_border(icat, nnb, nbindex, catch(inext,jthis+1), lenborder, blen/2.0_4)
-               ELSEIF ((inext == ithis-1) .and. (jthis > 1)) THEN
+               ELSEIF ((inext == ithis-1) .and. (jnext == jthis) .and. (jthis > 1)) THEN
                   CALL acc_border(icat, nnb, nbindex, catch(ithis,jthis-1), lenborder, blen/2.0_4)
                   CALL acc_border(icat, nnb, nbindex, catch(inext,jthis-1), lenborder, blen/2.0_4)
-               ELSEIF ((jnext == jthis+1) .and. (ithis > 1)) THEN
+               ELSEIF ((inext == ithis) .and. (jnext == jthis+1) .and. (ithis > 1)) THEN
                   CALL acc_border(icat, nnb, nbindex, catch(ithis-1,jthis), lenborder, blen/2.0_4)
                   CALL acc_border(icat, nnb, nbindex, catch(ithis-1,jnext), lenborder, blen/2.0_4)
-               ELSEIF ((jnext == jthis-1) .and. (ithis < np)) THEN
+               ELSEIF ((inext == ithis) .and. (jnext == jthis-1) .and. (ithis < np)) THEN
                   CALL acc_border(icat, nnb, nbindex, catch(ithis+1,jthis), lenborder, blen/2.0_4)
                   CALL acc_border(icat, nnb, nbindex, catch(ithis+1,jnext), lenborder, blen/2.0_4)
                ENDIF
-            ENDIF
+                  
+               IF ((inext == istart) .and. (jnext == jstart)) THEN
+                  exit
+               ELSEIF (bmask(inext,jnext)) THEN
+                  EXIT
+               ELSE
+                  ithis = inext
+                  jthis = jnext
+                  sdir = ishftc(sdir,mod(idir+3,8)+1)
+               ENDIF
 
-            IF ((inext == istart) .and. (jnext == jstart)) THEN
-               exit
-            ELSE
-               ithis = inext
-               jthis = jnext
-               sdir = ishftc(sdir,mod(idir+4,8)+1)
-            ENDIF
+            ENDDO
+
+            bmask = bmask .or. cmask
 
          ENDDO
-
-      ENDIF
+      ENDDO
 
       IF (nnb == 0) THEN
          write(*,*) 'Neighbours: ', icat, ' has no neighbours.'
@@ -888,7 +932,7 @@ CONTAINS
          write(*,*) 'Neighbours: ', icat, ' has ', nnb, 'neighbours', sum(lenborder(1:nnb))/nnb, &
             minval(lenborder(1:nnb)), maxval(lenborder(1:nnb))
       ENDIF
-
+      
    END SUBROUTINE get_basin_neighbour
 
 
