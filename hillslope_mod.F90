@@ -334,6 +334,24 @@ CONTAINS
             end do
          end do
 
+         IF (lakeid < 0) THEN
+            area_this = 0
+            do j = 1, mp
+               do i = 1, np
+                  call nextij (i,j, dir(i,j),inext,jnext, is_local = .true.)
+                  IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN 
+                     IF (.not. hmask(inext,jnext)) THEN
+                        hunit(i,j) = 1
+                        area_this = area_this + area(i,j)
+                     ENDIF
+                  ELSE
+                     hunit(i,j) = 1
+                     area_this = area_this + area(i,j)
+                  ENDIF
+               ENDDO
+            ENDDO
+         ENDIF
+
          nunit = 0
          do while (any(hmask .and. (hunit == -1)))
 
@@ -345,13 +363,19 @@ CONTAINS
                if (hunit(i,j) == -1) exit
             ENDDO
 
+            hunit(i,j) = nunit
+
+            IF (.not. ((lakeid < 0) .and. (nunit == 1))) THEN
+               area_this = area(i,j)
+            ELSE
+               area_this = area_this + area(i,j)
+            ENDIF
+
             CALL find_drainage_neighbour (np, mp, dir, hunit, hmask, i, j, route, nnode, unit_next)
 
             nborder = 0
             CALL find_nearest_pixels (np, mp, i, j, hmask, hunit, order2d, order1d, nborder, blist)
 
-            hunit(i,j) = nunit
-            area_this = area(i,j)
             DO WHILE (area_this < levsize)
 
                ipxl = 1

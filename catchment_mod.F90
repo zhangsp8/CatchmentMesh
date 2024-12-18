@@ -46,17 +46,13 @@ CONTAINS
       
       ! lake
       logical :: is_lake
-      integer (kind=4) :: nsmallcat, nshorecat, nlakeall
-      integer (kind=4) :: ilakecat, ismallcat, nc, ic, np, ip
-      integer (kind=4) :: outlet(2), lakeid, nplake, iplake
+      integer (kind=4) :: nshorecat, nc, ic, np, ip, jp
+      integer (kind=4) :: outlet(2), lakeid, nplake, iplake, icatdsp, i_dn, j_dn, npshore
       real    (kind=4) :: shorearea
-      integer (kind=4) :: icatdsp, i_dn, j_dn, npshore
-      integer (kind=4), allocatable :: lakepixels  (:,:), lakeindex(:), shoreindex(:)
-      integer (kind=4), allocatable :: smalllist   (:,:) 
-      integer (kind=4), allocatable :: shoreline   (:,:), samples(:,:), thiscat(:,:) 
-      real    (kind=4), allocatable :: upalake(:), wt(:)
-      logical, allocatable :: shoremask(:)
-      logical :: nextp
+      integer (kind=4), allocatable :: lakepixels(:,:), lakeindex (:)
+      integer (kind=4), allocatable :: shoreline (:,:), shoreindex(:), thiscat(:,:) 
+      real    (kind=4), allocatable :: upashore(:), hndshore(:)
+
 
       if (p_is_master) then
 
@@ -291,11 +287,9 @@ CONTAINS
                   101 format('(S2) Lake      : On', I4, ' ID ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
                      ' (', I5, '/', I5, ' done), ', I10, ' Pixels') 
 
-                  ! 2. small upstream catchment
-                  allocate (upalake (nplake))
-                  nsmallcat = 0
+                  ! 2. catchments along shore lines.
+                  npshore = 0
                   DO iplake = 1, nplake
-                     upa_up(:) = 0
                      do idir = 1, 8
                         call nextij (lakepixels(1,iplake), lakepixels(2,iplake), &
                            ishftc(int(-128,1),idir), i_up, j_up)
@@ -305,38 +299,88 @@ CONTAINS
                            if (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) then
                               if (get_lake(i_up,j_up) /= lakeid) then
                                  IF (get_upa(i_up,j_up) < catsize) THEN
-                                    upa_up(idir) = get_upa(i_up,j_up)
+                                    call append_plist (shoreline, npshore, i_up, j_up, check_exist = .false.)
                                  ENDIF
                               end if
                            end if
                         end if
                      end do
-
-                     DO WHILE (sum(upa_up) > catsize)
-                        idir = maxloc(upa_up, dim = 1)
-                        call nextij (lakepixels(1,iplake), lakepixels(2,iplake), &
-                           ishftc(int(-128,1),idir), i_up, j_up)
-                        call append_plist (smalllist, nsmallcat, i_up, j_up, check_exist = .false.)
-                        upa_up(idir) = 0.
-                     ENDDO
-                                    
-                     upalake(iplake) = sum(upa_up)
                   ENDDO
+                     
+                  nshorecat = 0
 
-                  ! 3. catchments along shore lines.
-                  shorearea = sum(upalake, mask = upalake > 0)
-                  IF (shorearea > 0) THEN
-                     nshorecat = max(min(nint(shorearea/catsize), count(upalake > 0)), 1)
-                  ELSE
-                     nshorecat = 0
+                  IF (npshore > 0) THEN
+
+                     allocate(upashore(npshore))
+                     allocate(hndshore(npshore))
+
+                     DO ip = 1, npshore
+                        upashore(ip) = get_upa(shoreline(1,ip),shoreline(2,ip))
+
+                        i_up = shoreline(1,ip)
+                        j_up = shoreline(2,ip)
+                        CALL nextij (i_up,j_up, get_dir(i_up,j_up), i,j)
+                        hndshore(ip) = get_elv(i_up,j_up) - get_elv(i,j)
+                     ENDDO
+
+                     allocate(shoreindex(npshore))
+                     shoreindex(:) = -1
+
+                     DO WHILE (any(shoreindex == -1))
+
+                        nshorecat = nshorecat + 1
+                        shorearea = 0
+
+                        ip = minloc(hndshore, mask = shoreindex == -1, dim=1)                        
+                        shoreindex(ip) = 0
+
+                        DO WHILE (any(shoreindex == 0))
+                           
+                           ip = minloc(hndshore, mask = shoreindex == 0, dim=1) 
+                           shorearea = shorearea + upashore(ip)
+
+                           IF (shorearea >= catsize) THEN
+                              WHERE (shoreindex == 0) 
+                                 shoreindex = -1
+                              END WHERE
+                              
+                              EXIT
+                              
+                           ENDIF
+                           
+                           shoreindex(ip) = nshorecat
+
+                           DO jp = 1, npshore
+                              IF (shoreindex(jp) == -1) THEN
+                                 IF (abs(shoreline(1,ip)-shoreline(1,jp)) <= 1) THEN
+                                    IF (shoreline(2,ip) == mglb) THEN
+                                       IF ((shoreline(2,jp) == 1) .or. (shoreline(2,jp) == mglb-1)) THEN
+                                          shoreindex(jp) = 0
+                                       ENDIF
+                                    ELSEIF (shoreline(2,ip) == 1) THEN
+                                       IF ((shoreline(2,jp) == mglb) .or. (shoreline(2,jp) == 2)) THEN
+                                          shoreindex(jp) = 0
+                                       ENDIF
+                                    ELSEIF (abs(shoreline(2,ip)-shoreline(2,jp)) <= 1) THEN
+                                       shoreindex(jp) = 0
+                                    ENDIF
+                                 ENDIF
+                              ENDIF
+                           ENDDO
+
+                        ENDDO
+
+                     ENDDO
+
+                     deallocate (upashore)
+                     deallocate (hndshore)
+
                   ENDIF
 
-                  nlakeall = nsmallcat + nshorecat
-                  
-                  IF (nlakeall > 0) THEN
+                  IF (nshorecat > 0) THEN
                   
                      ! inquire catchment number displacement
-                     mesg = (/p_iam_work, nlakeall/)
+                     mesg = (/p_iam_work, nshorecat/)
                      CALL mpi_send (mesg,    2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
                      CALL mpi_recv (icatdsp, 1, MPI_INTEGER, 0, 0, p_comm_work, p_stat, p_err)
                      
@@ -344,170 +388,78 @@ CONTAINS
                      thislake => thislake%next
                      thislake%next => null()
 
-                     ilakecat = 0
-                     allocate (thislake%cid    (nlakeall))
-                     allocate (thislake%lid    (nlakeall))
-                     allocate (thislake%nswe (4,nlakeall))
+                     allocate (thislake%cid    (nshorecat))
+                     allocate (thislake%lid    (nshorecat))
+                     allocate (thislake%nswe (4,nshorecat))
 
                      thislake%nswe(:,:) = 0
 
-                     DO ismallcat = 1, nsmallcat
+                     DO ic = 1, nshorecat
 
-                        outlet = smalllist(:,ismallcat)
-
-                        call nextij (outlet(1), outlet(2), get_dir(outlet(1),outlet(2)), i_dn, j_dn)
-
-                        elv0 = get_elv(i_dn,j_dn)
-                        elv  = get_elv(outlet(1),outlet(2))
+                        np = count(shoreindex == ic)
+                        allocate(thiscat (2,np))
+                        write(*,*) 'check ', np, ic, nshorecat
+                        thiscat(1,:) = pack(shoreline(1,1:npshore), shoreindex == ic)
+                        thiscat(2,:) = pack(shoreline(2,1:npshore), shoreindex == ic)
 
                         nplist = 0
-                        call append_plist3 (pixellist, nplist, outlet(1), outlet(2), elvdata, elv-elv0)
-
                         iplist = 1
-                        do while (iplist <= nplist)
-                           do idir = 1, 8
-                              call nextij (pixellist(1,iplist), pixellist(2,iplist), &
-                                 ishftc(int(-128,1),idir), i_up, j_up)
+                        DO ip = 1, np
 
-                              if (((pixellist(1,iplist) /= i_up) .or. (pixellist(2,iplist) /= j_up)) &
-                                 .and. within_region(i_up,j_up)) THEN
-                                 if (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) then
-                                    elv = get_elv(i_up, j_up)
-                                    call append_plist3 (pixellist, nplist, i_up, j_up, elvdata, elv-elv0)
+                           i_up = thiscat(1,ip)
+                           j_up = thiscat(2,ip)
+
+                           CALL nextij (i_up,j_up, get_dir(i_up,j_up), i,j)
+                           elv0 = get_elv(i,j)
+                                          
+                           elv = get_elv(i_up, j_up)
+                           call append_plist3 (pixellist, nplist, i_up, j_up, elvdata, elv-elv0)
+
+                           do while (iplist <= nplist)
+
+                              i = pixellist(1,iplist); j = pixellist(2,iplist)
+
+                              do idir = 1, 8
+                                 call nextij (i, j, ishftc(int(-128,1),idir), i_up, j_up)
+                                 if (((i /= i_up) .or. (j /= j_up)) .and. within_region(i_up,j_up)) THEN
+                                    if (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) then
+                                       IF (get_icat(i_up,j_up) == 0) THEN
+                                          elv = get_elv(i_up, j_up)
+                                          call append_plist3 (pixellist, nplist, i_up, j_up, &
+                                             elvdata, elv-elv0)
+                                       ENDIF
+                                    end if
                                  end if
-                              end if
-                           end do
+                              end do
 
-                           iplist = iplist + 1
-                        end do                     
+                              iplist = iplist + 1
 
-                        ilakecat = ilakecat + 1
-                        catnum = icatdsp + ilakecat 
+                           end do                     
+                        ENDDO
+
+                        catnum = icatdsp + ic
 
                         CALL update_catchment_pixels     (catnum, nplist, pixellist, elvdata)
-                        CALL update_catchment_boundaries (nplist, pixellist, ilakecat, thislake)
+                        CALL update_catchment_boundaries (nplist, pixellist, ic, thislake)
 
-                        thislake%cid(ilakecat) = catnum
-                        thislake%lid(ilakecat) = -1
-                  
-                        write(*,102) p_iam_glb, thislake%cid(ilakecat), thislake%nswe(:,ilakecat), &
-                           ilakecat, nlakeall, nplist
-                        102 format('(S2) LakeCat   : On', I4, ' ID ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
-                           ' (', I5, '/', I5, ' done), ', I10, ' Pixels') 
+                        thislake%cid(ic) = catnum
+                        thislake%lid(ic) = -1
+
+                        write(*,103) p_iam_glb, thislake%cid(ic), thislake%nswe(:,ic), ic, nshorecat, nplist
+                        103 format('(S2) LakeCat   : On', I4, ' ID ', I7, ' (',I6,',',I6,',',I6,',', &
+                           I6,'),', ' (', I5, '/', I5, ' done), ', I10, ' Pixels') 
+
+                        deallocate (thiscat)
 
                      ENDDO
-
-                     CALL sync_window ()
-
-                     IF (nshorecat > 0) THEN
-
-                        allocate (shoremask (nplake)) 
-                        shoremask = upalake > 0
-
-                        npshore   = count(shoremask)
-                        shorearea = sum(upalake, mask = shoremask)
-                        nc = max(min(nint(shorearea/catsize), npshore), 1)
-
-                        allocate (shoreline (2,npshore))
-                        shoreline(1,:) = pack(lakepixels(1,1:nplake), shoremask)
-                        shoreline(2,:) = pack(lakepixels(2,1:nplake), shoremask)
-
-                        allocate (samples (2,npshore))
-                        samples = shoreline
-
-                        west = shoreline(2,1)
-                        east = shoreline(2,1)
-                        DO ip = 2, npshore
-                           west = min_west(west, shoreline(2,ip))
-                           east = max_east(east, shoreline(2,ip))
-                        ENDDO
-                        IF (east < west) THEN
-                           DO ip = 1, npshore
-                              IF (shoreline(2,ip) < west) THEN
-                                 samples(2,ip) = samples(2,ip) + mglb
-                              ENDIF
-                           ENDDO
-                        ENDIF
-
-                        allocate (wt (npshore))
-                        wt = pack(upalake, mask = shoremask)
-
-                        allocate (shoreindex (npshore))
-
-                        CALL cvt (0, npshore, samples, nc, shoreindex, weight = wt)
-
-                        DO ic = 1, nc
-
-                           np = count(shoreindex == ic)
-                           allocate(thiscat (2,np))
-                           thiscat(1,:) = pack(shoreline(1,:), shoreindex == ic)
-                           thiscat(2,:) = pack(shoreline(2,:), shoreindex == ic)
                            
-                           nplist = 0
-                           iplist = 1
-                           DO ip = 1, np
+                     deallocate (shoreline )
+                     deallocate (shoreindex)
 
-                              elv0 = get_elv(thiscat(1,ip),thiscat(2,ip))
-                              nextp = .true.
-
-                              do while ((iplist <= nplist) .or. nextp)
-                                 IF (nextp) THEN
-                                    i = thiscat(1,ip); j = thiscat(2,ip)
-                                 ELSE
-                                    i = pixellist(1,iplist); j = pixellist(2,iplist)
-                                 ENDIF
-
-                                 do idir = 1, 8
-                                    call nextij (i, j, ishftc(int(-128,1),idir), i_up, j_up)
-                                    if (((i /= i_up) .or. (j /= j_up)) .and. within_region(i_up,j_up)) THEN
-                                       if (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) then
-                                          IF (get_icat(i_up,j_up) == 0) THEN
-                                             elv = get_elv(i_up, j_up)
-                                             call append_plist3 (pixellist, nplist, i_up, j_up, &
-                                                elvdata, elv-elv0)
-                                          ENDIF
-                                       end if
-                                    end if
-                                 end do
-
-                                 IF (nextp) THEN
-                                    nextp = .false.
-                                 ELSE
-                                    iplist = iplist + 1
-                                 ENDIF
-                              end do                     
-                           ENDDO
-                        
-                           ilakecat = ilakecat + 1
-                           catnum = icatdsp + ilakecat
-                           
-                           CALL update_catchment_pixels     (catnum, nplist, pixellist, elvdata)
-                           CALL update_catchment_boundaries (nplist, pixellist, ilakecat, thislake)
-
-                           thislake%cid(ilakecat) = catnum
-                           thislake%lid(ilakecat) = -1
-
-                           write(*,103) p_iam_glb, thislake%cid(ilakecat), thislake%nswe(:,ilakecat), &
-                              ilakecat, nlakeall, nplist
-                           103 format('(S2) LakeCat   : On', I4, ' ID ', I7, ' (',I6,',',I6,',',I6,',', &
-                              I6,'),', ' (', I5, '/', I5, ' done), ', I10, ' Pixels') 
-
-                           deallocate (thiscat)
-
-                        ENDDO
-                           
-                        deallocate (shoremask)
-                        deallocate (shoreline)
-                        deallocate (samples)
-                        deallocate (wt)
-                        deallocate (shoreindex)
-
-                     ENDIF
                   ENDIF
 
-                  deallocate (upalake)
-
                ENDIF
+
             ENDDO
 
             deallocate (river)
