@@ -398,7 +398,6 @@ CONTAINS
 
                         np = count(shoreindex == ic)
                         allocate(thiscat (2,np))
-                        write(*,*) 'check ', np, ic, nshorecat
                         thiscat(1,:) = pack(shoreline(1,1:npshore), shoreindex == ic)
                         thiscat(2,:) = pack(shoreline(2,1:npshore), shoreindex == ic)
 

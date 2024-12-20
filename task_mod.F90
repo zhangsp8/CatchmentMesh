@@ -42,6 +42,7 @@ contains
    subroutine task_init ()
 
       implicit none
+      integer :: errorcode
    
       call mpi_init (p_err) 
 
@@ -58,7 +59,7 @@ contains
 
       if (p_nnode < 3) then 
          write(*,*) 'Please use at least 3 processors on each node.'
-         call mpi_abort ()
+         call mpi_abort (p_comm_glb, errorcode, p_err)
       end if
 
    end subroutine task_init

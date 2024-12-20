@@ -71,6 +71,8 @@ CONTAINS
       INTEGER, allocatable :: idxtmp(:)
       REAL*4 , allocatable :: lentmp(:)
 
+      integer :: fid, errorcode
+
       if (p_is_master) then
 
          write(*,'(/A/)') 'Step 4 : Get network information ...'
@@ -103,6 +105,8 @@ CONTAINS
 
          maxnnb = 0
          allocate (bsn_nbr (ntotalcat))
+
+         open (unit=fid, file='mismatch.txt', status='replace')
 
          icat = 1
          ndone = 0
@@ -221,7 +225,7 @@ CONTAINS
 
                   IF (abs(bsn_nbr(icat)%lenborder(inb)-bsn_nbr(jcat)%lenborder(i_in_j)) &
                      > 0.1 * max(bsn_nbr(icat)%lenborder(inb),bsn_nbr(jcat)%lenborder(i_in_j))) THEN
-                     write(*,'(A,I7,A,I7,A,E20.4,A,E20.4,A)') '(S4) Border mismatch between : (', &
+                     write(fid,'(A,I7,A,I7,A,E20.4,A,E20.4,A)') '(S4) Border mismatch between : (', &
                         icat, ',', jcat, ')', &
                         bsn_nbr(icat)%lenborder(inb), '(->)', bsn_nbr(jcat)%lenborder(i_in_j), '(<-)'
                   ENDIF
@@ -260,6 +264,8 @@ CONTAINS
          deallocate (nexthu)
          deallocate (plenhu)
          deallocate (lfachu)
+
+         close(fid)
 
          call mpi_barrier (p_comm_work, p_err)
          call excute_data_task (t_exit)
@@ -441,6 +447,11 @@ CONTAINS
                   elvahu = elvahu / npxlhu
                   plenhu = plenhu / npxlhu
                endwhere 
+
+               IF (count(nexthu == -2) > 1) THEN
+                  write(*,*) 'Error: more than one lowest hydro unit in ', catnum, imin, imax, jmin, jmax
+                  CALL mpi_abort (p_comm_glb, errorcode, p_err)
+               ENDIF
 
             ENDIF
 
