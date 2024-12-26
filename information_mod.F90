@@ -106,6 +106,7 @@ CONTAINS
          maxnnb = 0
          allocate (bsn_nbr (ntotalcat))
 
+         fid = 99
          open (unit=fid, file='mismatch.txt', status='replace')
 
          icat = 1
