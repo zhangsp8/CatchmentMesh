@@ -47,7 +47,7 @@ CONTAINS
       real    (kind=4), allocatable :: hdnxt (:,:)
       real    (kind=4), allocatable :: plen2 (:,:)
 
-      integer (kind=4) :: nu, unum, nusend, nurecv
+      integer (kind=4) :: nu, maxnum, unum, nusend, nurecv
       integer (kind=4) :: nnode, inode
       real    (kind=4) :: dist, dx1, dx2, dy1, dy2
 
@@ -85,7 +85,8 @@ CONTAINS
          allocate (hru_info_plen (maxhunum,ntotalcat))
          allocate (hru_info_lfac (maxhunum,ntotalcat))
 
-         allocate (bsn_info_elva (ntotalcat))
+         allocate (bsn_info_num_hru (ntotalcat))
+         allocate (bsn_info_elva    (ntotalcat))
 
          hru_info_indx = -1
          hru_info_area = 0
@@ -118,9 +119,14 @@ CONTAINS
             iwork  = mesg(1)
             catnum = mesg(2)
             IF (catnum > 0) THEN
+              
                lakeid = lake_info_id(catnum)
+               
+               CALL mpi_recv (nurecv, 1, MPI_INTEGER, iwork, 1, p_comm_work, p_stat, p_err)
+              
+               bsn_info_num_hru(catnum) = nurecv
+               
                IF (lakeid <= 0) THEN
-                  CALL mpi_recv (nurecv, 1, MPI_INTEGER, iwork, 1, p_comm_work, p_stat, p_err)
                   CALL mpi_recv (indxhu(1:nurecv), nurecv, MPI_INTEGER, iwork, 1, p_comm_work, p_stat, p_err)
                   CALL mpi_recv (areahu(1:nurecv), nurecv, MPI_REAL4,   iwork, 1, p_comm_work, p_stat, p_err)
                   CALL mpi_recv (nexthu(1:nurecv), nurecv, MPI_INTEGER, iwork, 1, p_comm_work, p_stat, p_err)
@@ -151,7 +157,7 @@ CONTAINS
                   hru_info_plen(1:nurecv,catnum) = plenhu(1:nurecv)
                   hru_info_lfac(1:nurecv,catnum) = lfachu(1:nurecv)
                ENDIF
-
+            
             ENDIF
 
             IF (icat <= ntotalcat) THEN
@@ -173,9 +179,7 @@ CONTAINS
             IF (ndone == p_nwork) exit
          ENDDO
          
-         allocate (bsn_info_num_hru (ntotalcat))
          DO icat = 1, ntotalcat
-            bsn_info_num_hru(icat) = count(hru_info_indx(:,catnum) >= 0)
          ENDDO
 
          DO icat = 1, ntotalcat
@@ -327,18 +331,29 @@ CONTAINS
 
             allocate (hmask (np,mp))
             hmask = (catch == catnum) 
+            maxnum = maxval(hunit,mask=hmask)
+               
+            allocate (npxlhu (0:maxnum));  npxlhu(:) = 0
+            do j = 1, mp
+               do i = 1, np
+                  IF (hmask(i,j)) THEN
+                     npxlhu(hunit(i,j)) = npxlhu(hunit(i,j)) + 1
+                  ENDIF
+               ENDDO
+            ENDDO
+            
+            nu = count(npxlhu > 0)
+            deallocate (npxlhu)
 
             IF (lakeid <= 0) THEN
 
-               nu = maxval(hunit, mask = hmask) + 1
-
-               allocate (areahu (0:nu-1))
-               allocate (npxlhu (0:nu-1))
-               allocate (handhu (0:nu-1))
-               allocate (elvahu (0:nu-1))
-               allocate (nexthu (0:nu-1))
-               allocate (plenhu (0:nu-1))
-               allocate (lfachu (0:nu-1))
+               allocate (areahu (0:maxnum))
+               allocate (npxlhu (0:maxnum))
+               allocate (handhu (0:maxnum))
+               allocate (elvahu (0:maxnum))
+               allocate (nexthu (0:maxnum))
+               allocate (plenhu (0:maxnum))
+               allocate (lfachu (0:maxnum))
 
                areahu(:) = 0
                npxlhu(:) = 0
@@ -465,19 +480,20 @@ CONTAINS
 
             mesg(1:2) = (/p_iam_work, catnum/)
             call mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
+            
+            call mpi_send (nu, 1, MPI_INTEGER, 0, 1, p_comm_work, p_err) 
 
             IF (lakeid <= 0) THEN
 
-               allocate (mask (0:nu-1))
+               allocate (mask (0:maxnum))
 
                mask = npxlhu > 0
                nusend = count(mask)
-               call mpi_send (nusend, 1, MPI_INTEGER, 0, 1, p_comm_work, p_err) 
 
                allocate (datar (nusend))
                allocate (datai (nusend))
 
-               datai(1:nusend) = pack( (/(i,i=0,nu-1)/), mask)
+               datai(1:nusend) = pack( (/(i,i=0,maxnum)/), mask)
                call mpi_send (datai(1:nusend), nusend, MPI_INTEGER, 0, 1, p_comm_work, p_err) 
 
                datar(1:nusend) = pack(areahu, mask)

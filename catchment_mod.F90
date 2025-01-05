@@ -755,125 +755,45 @@ CONTAINS
       REAL    (kind = 4), allocatable, intent(out) :: lenborder(:)
 
       ! Local Variable
-      logical :: bmask(np,mp), cmask(np,mp), is_inside, is_alone
-      INTEGER :: ipxl, jpxl, istart, jstart, ithis, jthis, inext, jnext, idir
-      INTEGER :: igthis, jgthis, ignext, jgnext
-      REAL*4  :: blen
-      INTEGER*1 :: sdir
+      INTEGER :: ithis, jthis, inext, jnext, igthis, jgthis, ignext, jgnext
+      REAL (kind = 4) :: blen
 
       nnb = 0
       allocate (nbindex  (np*mp))
       allocate (lenborder(np*mp))
       lenborder(:) = 0
 
-      bmask = .false.
+      DO ithis = 1, np
+         DO jthis = 1, mp
+            IF (catch(ithis,jthis) == icat) THEN
 
-      DO ipxl = 1, np
+               DO inext = ithis-1, ithis+1
+                  DO jnext = jthis-1, jthis+1
+                     IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp) &
+                        .and. ((inext /= ithis) .or. (jnext /= jthis))) THEN
+                        IF (catch(inext,jnext) /= icat) THEN
 
-         DO jpxl = 1, mp
-            
-            IF ((catch(ipxl,jpxl) /= icat) .or. bmask(ipxl,jpxl)) CYCLE
+                           igthis = ithis + imin - 1
+                           ignext = inext + imin - 1
+                           jgthis = jthis + jmin - 1;  IF (jgthis > mglb) jgthis = jgthis - mglb
+                           jgnext = jnext + jmin - 1;  IF (jgnext > mglb) jgnext = jgnext - mglb
 
-            is_inside = .true.
-            is_alone  = .true.
-            sdir = int(64,1)
-            do idir = 1, 8
-               call nextij (ipxl, jpxl, ishftc(sdir,idir), inext, jnext, is_local=.true.)
-               IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN
-                  IF (catch(inext,jnext) /= icat) THEN
-                     IF (mod(idir,2) == 0) THEN
-                        is_inside = .false.
+                           blen = dist_between (igthis, jgthis, ignext, jgnext)
+
+                           IF (abs(inext-ithis)+abs(jnext-jthis) == 1) THEN
+                              blen = 0.5 * blen
+                           ELSE
+                              blen = 0.25 * blen
+                           ENDIF
+                              
+                           CALL acc_border(icat, nnb, nbindex, catch(inext,jnext), lenborder, blen)
+
+                        ENDIF
                      ENDIF
-                  ELSE
-                     is_alone = .false.
-                  ENDIF
-               ENDIF
-            ENDDO
-
-            IF (is_inside) CYCLE
-            IF (is_alone ) CYCLE
-
-            cmask = .false.
-            cmask(ipxl,jpxl) = .true.
-
-            istart = ipxl
-            jstart = jpxl
-
-            ithis = istart
-            jthis = jstart
-
-            sdir = int(64,1)
-            do idir = 1, 4
-               call nextij (ithis, jthis, sdir, inext, jnext, is_local=.true.)
-               IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN
-                  IF (catch(inext,jnext) /= icat) THEN
-                     exit
-                  ELSE
-                     sdir = ishftc(sdir,2)
-                  ENDIF
-               ELSE
-                  EXIT
-               ENDIF
-            ENDDO
-
-            DO WHILE (.true.)
-
-               do idir = 1, 8
-                  call nextij (ithis, jthis, ishftc(sdir,idir), inext, jnext, is_local=.true.)
-                  IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN
-                     IF (catch(inext,jnext) == icat) THEN
-                        exit
-                     ENDIF
-                  ENDIF
+                  ENDDO
                ENDDO
-            
-               cmask(inext,jnext) = .true.
 
-               igthis = ithis + imin - 1
-               ignext = inext + imin - 1
-               jgthis = jthis + jmin - 1
-               IF (jgthis > mglb) jgthis = jgthis - mglb
-               jgnext = jnext + jmin - 1
-               IF (jgnext > mglb) jgnext = jgnext - mglb
-
-               blen = dist_between (igthis, jgthis, ignext, jgnext)
-
-               IF     ((inext == ithis+1) .and. (jnext == jthis+1)) THEN
-                  CALL acc_border(icat, nnb, nbindex, catch(ithis,jnext), lenborder, blen)
-               ELSEIF ((inext == ithis+1) .and. (jnext == jthis-1)) THEN
-                  CALL acc_border(icat, nnb, nbindex, catch(inext,jthis), lenborder, blen)
-               ELSEIF ((inext == ithis-1) .and. (jnext == jthis-1)) THEN
-                  CALL acc_border(icat, nnb, nbindex, catch(ithis,jnext), lenborder, blen)
-               ELSEIF ((inext == ithis-1) .and. (jnext == jthis+1)) THEN
-                  CALL acc_border(icat, nnb, nbindex, catch(inext,jthis), lenborder, blen)
-               ELSEIF ((inext == ithis+1) .and. (jnext == jthis) .and. (jthis < mp)) THEN
-                  CALL acc_border(icat, nnb, nbindex, catch(ithis,jthis+1), lenborder, blen/2.0_4)
-                  CALL acc_border(icat, nnb, nbindex, catch(inext,jthis+1), lenborder, blen/2.0_4)
-               ELSEIF ((inext == ithis-1) .and. (jnext == jthis) .and. (jthis > 1)) THEN
-                  CALL acc_border(icat, nnb, nbindex, catch(ithis,jthis-1), lenborder, blen/2.0_4)
-                  CALL acc_border(icat, nnb, nbindex, catch(inext,jthis-1), lenborder, blen/2.0_4)
-               ELSEIF ((inext == ithis) .and. (jnext == jthis+1) .and. (ithis > 1)) THEN
-                  CALL acc_border(icat, nnb, nbindex, catch(ithis-1,jthis), lenborder, blen/2.0_4)
-                  CALL acc_border(icat, nnb, nbindex, catch(ithis-1,jnext), lenborder, blen/2.0_4)
-               ELSEIF ((inext == ithis) .and. (jnext == jthis-1) .and. (ithis < np)) THEN
-                  CALL acc_border(icat, nnb, nbindex, catch(ithis+1,jthis), lenborder, blen/2.0_4)
-                  CALL acc_border(icat, nnb, nbindex, catch(ithis+1,jnext), lenborder, blen/2.0_4)
-               ENDIF
-                  
-               IF ((inext == istart) .and. (jnext == jstart)) THEN
-                  exit
-               ELSEIF (bmask(inext,jnext)) THEN
-                  EXIT
-               ELSE
-                  ithis = inext
-                  jthis = jnext
-                  sdir = ishftc(sdir,mod(idir+3,8)+1)
-               ENDIF
-
-            ENDDO
-
-            bmask = bmask .or. cmask
-
+            ENDIF
          ENDDO
       ENDDO
 
