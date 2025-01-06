@@ -71,7 +71,7 @@ CONTAINS
       INTEGER, allocatable :: idxtmp(:)
       REAL*4 , allocatable :: lentmp(:)
 
-      integer :: fid, errorcode
+      integer :: errorcode
 
       if (p_is_master) then
 
@@ -106,9 +106,6 @@ CONTAINS
 
          maxnnb = 0
          allocate (bsn_nbr (ntotalcat))
-
-         fid = 99
-         open (unit=fid, file='mismatch.txt', status='replace')
 
          icat = 1
          ndone = 0
@@ -228,13 +225,6 @@ CONTAINS
                   write(*,'(A,I7,A,I7,A,E20.4,A,E20.4,A)') '(S4) Basin Pair: (', icat, ',', jcat, ')', &
                      bsn_nbr(icat)%lenborder(inb), '(->)', bsn_nbr(jcat)%lenborder(i_in_j), '(<-)'
 
-                  IF (abs(bsn_nbr(icat)%lenborder(inb)-bsn_nbr(jcat)%lenborder(i_in_j)) &
-                     > 0.1 * max(bsn_nbr(icat)%lenborder(inb),bsn_nbr(jcat)%lenborder(i_in_j))) THEN
-                     write(fid,'(A,I7,A,I7,A,E20.4,A,E20.4,A)') '(S4) Border mismatch between : (', &
-                        icat, ',', jcat, ')', &
-                        bsn_nbr(icat)%lenborder(inb), '(->)', bsn_nbr(jcat)%lenborder(i_in_j), '(<-)'
-                  ENDIF
-
                   bsn_nbr(icat)%lenborder(inb) = &
                      max(bsn_nbr(icat)%lenborder(inb), bsn_nbr(jcat)%lenborder(i_in_j))
 
@@ -269,8 +259,6 @@ CONTAINS
          deallocate (nexthu)
          deallocate (plenhu)
          deallocate (lfachu)
-
-         close(fid)
 
          call mpi_barrier (p_comm_work, p_err)
          call excute_data_task (t_exit)
