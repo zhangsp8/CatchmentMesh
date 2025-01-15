@@ -309,7 +309,7 @@ CONTAINS
          order1d = (/ (ipxl, ipxl = 1, npxl) /)
 
          CALL quicksort (npxl, h1d, order1d)
-
+         
          order1d(order1d) = (/ (ipxl, ipxl = 1, npxl) /)
          order2d = unpack(order1d, msk, -1)
 
@@ -344,7 +344,8 @@ CONTAINS
          DO WHILE (any(hmask .and. (hunit == -1)))
 
             nunit = nunit + 1
-
+         
+            ! find first pixel.
             DO ipxl = fstloc, npxl
                i = ij_sorted(1,ipxl)
                j = ij_sorted(2,ipxl)
@@ -367,55 +368,82 @@ CONTAINS
             ENDIF
 
             DO WHILE (area_this < levsize)
+               
+               i = ij_sorted(1,ipxl)
+               j = ij_sorted(2,ipxl)
 
-               ipxl = fstloc
                found = .false.
-               DO WHILE (ipxl <= npxl)
+               DO jnb = max(j-1,1), min(j+1,mp)
+                  DO inb = max(i-1,1), min(i+1,np)
+                     IF ((inb /= i) .or. (jnb /= j)) THEN
+                        IF (hmask(inb,jnb) .and. (hunit(inb,jnb) == -1)) THEN
 
-                  i = ij_sorted(1,ipxl)
-                  j = ij_sorted(2,ipxl)
+                           CALL nextij (inb,jnb, dir(inb,jnb),inext,jnext, is_local = .true.)
 
-                  IF (hunit(i,j) == -1) THEN
-
-                     CALL nextij (i,j, dir(i,j),inext,jnext, is_local = .true.)
-
-                     IF (hunit(inext,jnext) == nunit) THEN
-                        found = .true.
-                     ELSEIF (hunit(inext,jnext) == unit_next) THEN
-                        DO jnb = max(j-1,1), min(j+1,mp)
-                           DO inb = max(i-1,1), min(i+1,np)
-                              IF ((inb /= i) .or. (jnb /= j)) THEN
-                                 IF (hunit(inb,jnb) == nunit) THEN
-                                    found = .true.
-                                    EXIT
-                                 ENDIF
+                           IF ((hunit(inext,jnext) == nunit) .or. (hunit(inext,jnext) == unit_next)) THEN
+                              IF (order2d(inb,jnb) < ipxl) THEN
+                                 found = .true.
+                                 ipxl = order2d(inb,jnb)
                               ENDIF
-                           ENDDO
-                           IF (found) EXIT
-                        ENDDO
+                           ENDIF
+                        ENDIF
                      ENDIF
-
-                  ENDIF
-
-                  IF (found) THEN
-                     EXIT
-                  ELSE
-                     ipxl = ipxl + 1
-                  ENDIF 
+                  ENDDO
                ENDDO
 
-               IF (found) THEN
+               IF (.not. found) THEN
 
+                  ipxl = ipxl + 1
+
+                  DO WHILE (ipxl <= npxl)
+
+                     i = ij_sorted(1,ipxl)
+                     j = ij_sorted(2,ipxl)
+
+                     IF (hunit(i,j) == -1) THEN
+
+                        CALL nextij (i,j, dir(i,j),inext,jnext, is_local = .true.)
+
+                        IF (hunit(inext,jnext) == nunit) THEN
+                           found = .true.
+                        ELSEIF (hunit(inext,jnext) == unit_next) THEN
+                           DO jnb = max(j-1,1), min(j+1,mp)
+                              DO inb = max(i-1,1), min(i+1,np)
+                                 IF ((inb /= i) .or. (jnb /= j)) THEN
+                                    IF (hmask(inb,jnb) .and. (hunit(inb,jnb) == nunit)) THEN
+                                       found = .true.
+                                       EXIT
+                                    ENDIF
+                                 ENDIF
+                              ENDDO
+                              IF (found) EXIT
+                           ENDDO
+                        ENDIF
+
+                     ENDIF
+
+                     IF (found) THEN
+                        EXIT
+                     ELSE
+                        ipxl = ipxl + 1
+                     ENDIF 
+                  ENDDO
+
+               ENDIF
+
+               IF (found) THEN
+                  i = ij_sorted(1,ipxl)
+                  j = ij_sorted(2,ipxl)
                   hunit(i,j) = nunit
                   area_this = area_this + area(i,j)
-
-                  DO WHILE ((fstloc < npxl) .and. (hunit(ij_sorted(1,fstloc),ij_sorted(2,fstloc)) /= -1))
-                     fstloc = fstloc + 1
-                  ENDDO
                ELSE
                   EXIT
                ENDIF
 
+            ENDDO
+               
+            DO WHILE ((fstloc < npxl) .and. (hunit(ij_sorted(1,fstloc),ij_sorted(2,fstloc)) /= -1))
+               fstloc = fstloc + 1
             ENDDO
 
          ENDDO
