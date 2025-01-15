@@ -17,7 +17,7 @@ CONTAINS
       !
       !*****************************************************************************80
 
-      implicit none
+      IMPLICIT NONE
 
       integer, parameter :: rk = 8
 
@@ -25,7 +25,7 @@ CONTAINS
       integer point_num
       integer points (2,point_num) ! Input:  grid points in the area
       integer cell_num             ! Input:  number of cells
-      integer cell_id(point_num)   ! Output: cell id where the grid point is located
+      integer cell_id(point_num)   ! Output: cell id WHERE the grid point is located
       
       real*4, optional :: weight (point_num)   ! Input: weight
 
@@ -94,7 +94,7 @@ CONTAINS
 
       IF (point_num > 10000) THEN 
 !$OMP PARALLEL DO NUM_THREADS(10) PRIVATE(js,d0,d04,jr,dd)
-         do js = 1, point_num
+         DO js = 1, point_num
             cell_id(js) = 1
             d0 = (r1(1,cell_id(js)) - sample(1,js))**2 + (r1(2,cell_id(js)) - sample(2,js))**2
             d04 = d0 * 4.0
@@ -113,7 +113,7 @@ CONTAINS
          ENDDO
 !$OMP END PARALLEL DO
       ELSE
-         do js = 1, point_num
+         DO js = 1, point_num
             cell_id(js) = 1
             d0 = (r1(1,cell_id(js)) - sample(1,js))**2 + (r1(2,cell_id(js)) - sample(2,js))**2
             d04 = d0 * 4.0
@@ -134,20 +134,20 @@ CONTAINS
 
       it_num = 0
       !  Carry out the iteration.
-      do while ( it_num < it_max )
+      DO WHILE ( it_num < it_max )
 
          it_num = it_num + 1
 
          !  Estimate the new centroids.
          r2(1:2,1:cell_num) = 0.0D+00
          sumwt (1:cell_num) = 0.0D+00
-         do js = 1, point_num
+         DO js = 1, point_num
             r2(1:2,cell_id(js)) = r2(1:2,cell_id(js)) + sample(1:2,js) * wts(js)
             sumwt(cell_id(js)) = sumwt(cell_id(js)) + wts(js)
-         end do
+         ENDDO
 
          DO WHILE (any(sumwt == 0))
-            icell = findloc(sumwt, 0, dim=1)
+            icell = findloc(sumwt, 0., dim=1)
             jcell = maxloc(sumwt, dim=1)
 
             ip = findloc(cell_id, jcell, dim=1)
@@ -159,16 +159,16 @@ CONTAINS
             sumwt(jcell) = sumwt(jcell) - wts(ip)
          ENDDO
 
-         do jr = 1, cell_num
+         DO jr = 1, cell_num
             r2(1:2,jr) = r2(1:2,jr) / real ( sumwt(jr), kind = rk )
-         end do
+         ENDDO
 
          !  Determine the sum of the distances between the old generators 
          !  and the estimated centroids.
          it_diff = sqrt(sum((r2(1:2,1)-r1(1:2,1))**2))
-         do jr = 2, cell_num
+         DO jr = 2, cell_num
             it_diff = max(it_diff, sqrt(sum((r2(1:2,jr)-r1(1:2,jr))**2)))
-         end do
+         ENDDO
       
          !  Replace the generators by the centroids.
          r1 = r2
@@ -182,7 +182,7 @@ CONTAINS
          ! Update clusters
          IF (point_num > 10000) THEN 
 !$OMP PARALLEL DO NUM_THREADS(10) PRIVATE(js,d0,d04,jr,dd)
-            do js = 1, point_num
+            DO js = 1, point_num
                d0 = (r1(1,cell_id(js)) - sample(1,js))**2 + (r1(2,cell_id(js)) - sample(2,js))**2
                d04 = d0 * 4.0
                DO jr = 1, cell_num
@@ -200,7 +200,7 @@ CONTAINS
             ENDDO
 !$OMP END PARALLEL DO
          ELSE
-            do js = 1, point_num
+            DO js = 1, point_num
                d0 = (r1(1,cell_id(js)) - sample(1,js))**2 + (r1(2,cell_id(js)) - sample(2,js))**2
                d04 = d0 * 4.0
                DO jr = 1, cell_num
@@ -223,7 +223,7 @@ CONTAINS
 
          IF (it_diff < tol) EXIT
 
-      end do
+      ENDDO
 
       deallocate (sample)
       deallocate (r1)

@@ -1,27 +1,205 @@
 MODULE river_lake_mod
+   
+   integer (kind=4) :: nmouth
+   integer (kind=4), allocatable :: rivermouth(:,:)
+   real    (kind=4), allocatable :: upa_mouth (:)
 
+   integer, SAVE :: ithisblk = -1 
+   integer, SAVE :: jthisblk = -1 
+   logical :: firstblock = .true.
+      
+   character(len=256) :: binfo
+      
 CONTAINS
 
-   subroutine get_river_lake (catsize, catsizemin, rivermouthfile)
+   SUBROUTINE readin_rivermouth (rmfile)
 
-      use task_mod
-      use hydro_data_mod
+      IMPLICIT NONE
+
+      character(len=*), intent(in) :: rmfile
+      ! local
+      integer :: stat
+      integer (kind=4) :: imouth, mouthcat(2)
+
+      open (10, status='OLD', file=rmfile, form="FORMATTED")
+
+      nmouth = 0
+      DO WHILE (.true.)
+         read(10,*,iostat=stat) mouthcat
+         IF (is_iostat_end(stat)) EXIT
+         nmouth = nmouth + 1
+      ENDDO
+
+      rewind(10)
+
+      allocate (rivermouth (2,nmouth))
+      DO imouth = 1, nmouth
+         read(10,*) rivermouth(:,imouth)
+      ENDDO
+      
+      close(10)
+
+   END SUBROUTINE readin_rivermouth
+
+   SUBROUTINE get_next_rivermouth (catsize, catsizemin, end_of_data)
+
+      USE ncio_serial
+      USE hydro_data_mod
+      IMPLICIT NONE
+
+      real (kind = 4), intent(in) :: catsize, catsizemin
+      logical, intent(out) :: end_of_data
+
+      integer(kind=1), allocatable :: dir  (:,:)  ! flow direction
+      real   (kind=4), allocatable :: upa  (:,:)  ! upstream drainage area (km^2) 
+
+      character(len=256) :: filename
+      logical :: fexists
+      integer :: idsp, jdsp, i, j, m, imouth, jmouth, inext, jnext
+
+      end_of_data = .false.
+
+      DO WHILE (.not. end_of_data)
+
+         IF (firstblock) THEN
+            ithisblk = (inorth - 1)/nbox + 1
+            jthisblk = (jwest  - 1)/mbox + 1
+         ELSE
+            idsp = (ithisblk-1)*nbox 
+            jdsp = (jthisblk-1)*mbox 
+            IF (jdsp > jeast) THEN
+               jthisblk = mod(jthisblk,mblock) + 1
+            ELSEIF (jdsp+mbox < jeast) THEN
+               jthisblk = jthisblk + 1
+            ELSEIF (idsp+nbox < isouth) THEN
+               ithisblk = ithisblk + 1
+               jthisblk = (jwest - 1)/mbox + 1
+            ELSE
+               end_of_data = .true. 
+            ENDIF
+         ENDIF
+
+         IF (end_of_data) THEN
+            EXIT
+         ELSE
+            
+            idsp = (ithisblk-1)*nbox 
+            jdsp = (jthisblk-1)*mbox 
+
+            CALL get_filename (hydro_dir, ithisblk, jthisblk, filename)
+            inquire (file=trim(filename), exist=fexists)
+
+            IF (fexists) THEN
+
+               CALL ncio_read_serial (filename, 'dir', dir)
+               CALL ncio_read_serial (filename, 'upa', upa)
+
+               nmouth = 0
+               DO j = 1, mbox
+                  DO i = 1, nbox
+                     imouth = idsp + i
+                     jmouth = jdsp + j
+                     IF (within_region(imouth, jmouth)) THEN
+                        ! river mouth and inland depression.
+                        IF (dir(i,j) == 0) THEN
+                           IF (upa(i,j) > catsizemin) THEN
+                              nmouth = nmouth + 1
+                           ENDIF
+                        ELSEIF (dir(i,j) == -1) THEN
+                           nmouth = nmouth + 1
+                        ELSEIF (on_region_boundary(imouth,jmouth) .and. (upa(i,j) >= catsize)) THEN
+                           CALL nextij (imouth, jmouth, dir(i,j), inext, jnext)
+                           IF (.not. within_region(inext,jnext)) THEN
+                              nmouth = nmouth + 1
+                           ENDIF
+                        ENDIF
+                     ENDIF
+                  ENDDO
+               ENDDO
+
+               IF (nmouth > 0) THEN
+
+                  IF (allocated(rivermouth)) deallocate(rivermouth)
+                  IF (allocated(upa_mouth )) deallocate(upa_mouth )
+
+                  allocate (rivermouth (2,nmouth))
+                  allocate (upa_mouth    (nmouth))
+
+                  write(binfo, '(A,I2,A,I2,A)') '(',ithisblk,',',jthisblk,')'
+                  write(*,'(/3A/)') 'Step 1 ', trim(binfo), &
+                     ': Finding river mouths, inland depressions and outlets on region boundaries ...'
+
+                  m = 0
+                  DO j = 1, mbox
+                     DO i = 1, nbox
+                        imouth = idsp + i
+                        jmouth = jdsp + j
+                        IF (within_region(imouth, jmouth)) THEN
+                           ! river mouth and inland depression.
+                           IF (dir(i,j) == 0) THEN
+                              IF (upa(i,j) > catsizemin) THEN
+                                 m = m + 1
+                                 rivermouth(:,m) = (/imouth, jmouth/)
+                                 upa_mouth   (m) = upa(i,j)
+                                 write (*,97) trim(binfo), rivermouth(1,m), rivermouth(2,m), upa_mouth(m)
+                                 97 format('(S1) ',A,' mouth found : (',I6,',',I6,'), upa ',F8.0, ' river mouth.')
+                              ENDIF
+                           ELSEIF (dir(i,j) == -1) THEN
+                              m = m + 1
+                              rivermouth(:,m) = (/imouth, jmouth/)
+                              upa_mouth   (m) = upa(i,j)
+                              write (*,98) trim(binfo), rivermouth(1,m), rivermouth(2,m), upa_mouth(m)
+                              98 format('(S1) ',A,' mouth found : (',I6,',',I6,'), upa ',F8.0, ' inland depression.')
+                           ELSEIF (on_region_boundary(imouth,jmouth) .and. (upa(i,j) >= catsize)) THEN
+                              CALL nextij (imouth, jmouth, dir(i,j), inext, jnext)
+                              IF (.not. within_region(inext,jnext)) THEN
+                                 m = m + 1
+                                 rivermouth(:,m) = (/imouth, jmouth/)
+                                 upa_mouth (m)   = upa(i,j)
+
+                                 write (*,99) trim(binfo), rivermouth(1,m), rivermouth(2,m), upa_mouth(m)
+                                 99 format('(S1) ',A,' mouth found : (',I6,',',I6,'), upa ',F8.0, ' region boundary.')
+                              ENDIF
+                           ENDIF
+                        ENDIF
+                     ENDDO
+                  ENDDO
+         
+                  IF (.not. firstblock) THEN
+                     allocate (thisinfo%next)
+                     thisinfo%next%icatdsp = thisinfo%icatdsp + thisinfo%ntotalcat
+                     thisinfo => thisinfo%next
+                     thisinfo%next => null()
+                  ENDIF
+         
+                  IF (firstblock) firstblock = .false.
+               
+                  EXIT
+
+               ENDIF
+            ENDIF
+         ENDIF
+      
+         IF (firstblock) firstblock = .false.
+
+      ENDDO
+
+   END SUBROUTINE get_next_rivermouth 
+
+   SUBROUTINE get_river_lake (catsize, catsizemin, rivermouthfile, end_of_data)
+
+      USE task_mod
+      USE hydro_data_mod
       USE utils_mod
-      implicit none
+      IMPLICIT NONE
 
       real    (kind=4),   intent(in) :: catsize    ! max catchment size
       real    (kind=4),   intent(in) :: catsizemin ! min catchment size
       character(len=256), intent(in), optional :: rivermouthfile
+      logical, intent(out), optional :: end_of_data
 
       ! Local Variables
-      integer (kind=4) :: nmouth, imouth
-      integer (kind=4), allocatable :: rivermouth(:,:)
-      real    (kind=4), allocatable :: upa_mouth (:)
-
-      integer (kind=4) :: iproc, scnt, sdsp, idata
-      integer (kind=4), allocatable :: rcnt(:), rdsp(:)
-
-      integer (kind=4) :: ncat, icat, icat_dsp, mouthcat(2)
+      integer (kind=4) :: imouth, ncat, icat, icat_dsp, mouthcat(2)
       integer (kind=4) :: nriv, iriv, head, tail
       integer (kind=4), allocatable :: river    (:,:)
       integer (kind=4), allocatable :: mouthlist(:,:)
@@ -38,190 +216,53 @@ CONTAINS
       integer (kind=4) :: lakeid, nplake, iplake
       integer (kind=4), allocatable :: lakelist  (:,:)
 
-      logical :: check_dup_mouth
-      integer (kind=4), allocatable :: order(:)
-      logical, allocatable :: mouthmask(:)
 
-      integer :: stat
-
-      check_dup_mouth = .not. present(rivermouthfile)
-
-      if (p_is_master) then
-
-         write(*,'(/A/)') 'Step 1 : Finding all rivers and lake outlets ...'
-
+      IF (p_is_master) THEN
          IF (present(rivermouthfile)) THEN
-            
-            open (10, status='OLD', file=rivermouthfile, form="FORMATTED")
-
-            nmouth = 0
-            DO WHILE (.true.)
-               read(10,*,iostat=stat) mouthcat
-               IF (is_iostat_end(stat)) EXIT
-               nmouth = nmouth + 1
-            ENDDO
-
-            rewind(10)
-
-            allocate (rivermouth (2,nmouth))
-            DO imouth = 1, nmouth
-               read(10,*) rivermouth(:,imouth)
-            ENDDO
-
-            close(10)
+            CALL readin_rivermouth (rivermouthfile)
+            binfo = '(file)'
          ELSE
-            allocate (rcnt (0:p_ndata))
-            allocate (rdsp (0:p_ndata))
-
-            nmouth = 0
-            call mpi_gather (nmouth, 1, MPI_INTEGER, rcnt, 1, MPI_INTEGER, 0, p_comm_data, p_err)
-
-            rdsp(0) = 0
-            do iproc = 1, p_ndata
-               rdsp(iproc) = rdsp(iproc-1) + rcnt(iproc-1)
-            end do
-
-            nmouth = sum(rcnt)
-            allocate (rivermouth (2,nmouth))
-            allocate (upa_mouth  (nmouth))
-            call mpi_gatherv (MPI_IN_PLACE, 0, MPI_INTEGER, &
-               rivermouth, rcnt*2, rdsp*2, MPI_INTEGER, 0, p_comm_data, p_err)
-            call mpi_gatherv (MPI_IN_PLACE, 0, MPI_REAL4, &
-               upa_mouth, rcnt, rdsp, MPI_REAL4, 0, p_comm_data, p_err)
-
-            deallocate (rcnt)
-            deallocate (rdsp)
+            CALL get_next_rivermouth (catsize, catsizemin, end_of_data)
+            write(binfo, '(A,I2,A,I2,A)') '(',ithisblk,',',jthisblk,')'
          ENDIF
+      ENDIF
 
-         call mpi_send (nmouth,     1,      MPI_INTEGER, 1, 1, p_comm_work, p_err)
-         call mpi_send (rivermouth, nmouth*2, MPI_INTEGER, 1, 1, p_comm_work, p_err)
-         deallocate (rivermouth)
+      IF (present(end_of_data)) THEN
+         CALL mpi_bcast (end_of_data, 1, MPI_LOGICAL, p_master_address, p_comm_glb, p_err)
+         IF (end_of_data) RETURN
+      ENDIF
+      
+      CALL mpi_bcast (binfo, 256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
+      
+      
+      IF (p_is_master)  write(*,'(/3A/)') 'Step 1 ', trim(binfo), ': Finding all reach and lake outlets ...'
 
-         IF (check_dup_mouth) THEN 
-            call mpi_send (upa_mouth, nmouth, MPI_REAL4, 1, 1, p_comm_work, p_err)
-            deallocate (upa_mouth)
-         ENDIF
+      IF (p_is_data) THEN
 
-         ! river length and elevations.
-         call mpi_recv (nrivseg, 1, MPI_INTEGER, 1, 1, p_comm_work, p_stat, p_err)
-         allocate (riv_info_len (nrivseg))
-         allocate (riv_info_elv (nrivseg))
-         call mpi_recv (riv_info_len, nrivseg, MPI_REAL4, 1, 1, p_comm_work, p_stat, p_err)
-         call mpi_recv (riv_info_elv, nrivseg, MPI_REAL4, 1, 1, p_comm_work, p_stat, p_err)
+         CALL data_daemon ()
 
-         ! gather river pixels.
-         call mpi_recv (nrivpix, 1, MPI_INTEGER, 1, 1, p_comm_work, p_stat, p_err)
-         allocate (riv_info_pix (3,nrivpix))
-         call mpi_recv (riv_info_pix, nrivpix*3, MPI_INTEGER, 1, 1, p_comm_work, p_stat, p_err)
+      ELSEIF (p_is_master) THEN
 
-         call excute_data_task (t_exit)
-
-      elseif (p_is_data) then
-
-         IF (.not. present(rivermouthfile)) THEN
-
-            allocate (rivermouth (2,1000000))
-            allocate (upa_mouth  (1000000))
-
-            nmouth = 0
-            do jblk = 1, mblock
-               do iblk = 1, nblock
-                  if (bkid(iblk,jblk) == p_iam_glb) then
-                     do j = 1, mbox
-                        do i = 1, nbox
-                           if (blks(iblk,jblk)%icat(i,j) == 0) then
-                              ! river mouth and inland depression.
-                              IF ((blks(iblk,jblk)%dir(i,j) == 0) .or. (blks(iblk,jblk)%dir(i,j) == -1)) THEN
-
-                                 IF (blks(iblk,jblk)%upa(i,j) >= catsizemin) THEN
-                                    call append_plist (rivermouth, nmouth, &
-                                       blks(iblk,jblk)%idsp + i, blks(iblk,jblk)%jdsp + j, &
-                                       check_exist = .false.)
-                                    upa_mouth(nmouth) = blks(iblk,jblk)%upa(i,j)
-                                 ENDIF
-
-                              ELSEIF ((blks(iblk,jblk)%idsp+i == inorth)  &
-                                 .or. (blks(iblk,jblk)%idsp+i == isouth)  &
-                                 .or. (blks(iblk,jblk)%jdsp+j == jwest )  &
-                                 .or. (blks(iblk,jblk)%jdsp+j == jeast ))  THEN
-
-                                 IF (blks(iblk,jblk)%upa(i,j) >= catsize) THEN
-                                    call append_plist (rivermouth, nmouth, &
-                                       blks(iblk,jblk)%idsp + i, blks(iblk,jblk)%jdsp + j, &
-                                       check_exist = .false.)
-                                    upa_mouth(nmouth) = blks(iblk,jblk)%upa(i,j)
-                                 ENDIF
-
-                              ENDIF
-                           ENDIF
-                        end do
-                     end do
-                  end if
-               end do
-            end do
-
-            call mpi_gather  (nmouth, 1, MPI_INTEGER, 0, 0, MPI_INTEGER, 0, p_comm_data, p_err)
-            call mpi_gatherv (rivermouth(:,1:nmouth), nmouth*2, MPI_INTEGER, &
-               0, 0, 0, MPI_INTEGER, 0, p_comm_data, p_err)
-            call mpi_gatherv (upa_mouth(1:nmouth), nmouth, MPI_REAL4, &
-               0, 0, 0, MPI_REAL4, 0, p_comm_data, p_err)
-
-            deallocate (rivermouth)
-            deallocate (upa_mouth )
-
-         ENDIF
-
-         call data_daemon ()
-
-      end if
-
-      if (p_is_work .and. (p_iam_work == 1)) then
-
+         CALL sync_window ()
+         
          rlen_max = sqrt(catsize)
 
-         call mpi_recv (nmouth, 1, MPI_INTEGER, 0, 1, p_comm_work, p_stat, p_err)
-         
-         allocate (rivermouth (2,nmouth))
-         call mpi_recv (rivermouth, nmouth*2, MPI_INTEGER, 0, 1, p_comm_work, p_stat, p_err)
-
-         IF (check_dup_mouth) THEN 
-            allocate (upa_mouth (nmouth))
-            call mpi_recv (upa_mouth, nmouth, MPI_REAL4, 0, 1, p_comm_work, p_stat, p_err)
-
-            allocate (order (nmouth))
-            order = (/(imouth, imouth = 1, nmouth)/)
-
-            CALL quicksort (nmouth, upa_mouth, order)
-
-            order = order(nmouth:1:-1)
-
-            rivermouth(1,:) = rivermouth(1,order)
-            rivermouth(2,:) = rivermouth(2,order)
-            
-            deallocate (upa_mouth)
-            deallocate (order)
-         ENDIF
-            
          allocate (river (3,1))
          allocate (mouthlist (2,1000000))
          allocate (lakelist  (2,1000000))
-
-         allocate (mouthmask (nmouth)); mouthmask(:) = .true.
 
          ncat = 0
          icat = 0
          nriv = 0
          
-         do imouth = 1, nmouth
-
-            IF (.not. mouthmask(imouth)) CYCLE
+         DO imouth = 1, nmouth
 
             ! ---------------- next river mouth ---------------------------- 
             mouthcat = rivermouth(:,imouth)
-            ! new river segment (case 1): river mouth
-            call append_plist (mouthlist, ncat, mouthcat(1), mouthcat(2), check_exist = .false.)
+            ! new river segment (CASE 1): river mouth
+            CALL append_plist (mouthlist, ncat, mouthcat(1), mouthcat(2), check_exist = .false.)
 
-            do while (icat < ncat)
+            DO WHILE (icat < ncat)
 
                icat = icat + 1
                mouthcat = mouthlist(:,icat)
@@ -230,41 +271,37 @@ CONTAINS
 
                IF (.not. is_lake) THEN
 
-                  write (*,100) mouthcat(1), mouthcat(2), get_upa(mouthcat(1),mouthcat(2))
-                  100 format('(S1) River : mouth (',I6,',',I6,'), upa ',F8.0)
+                  write (*,100) trim(binfo), mouthcat(1), mouthcat(2), get_upa(mouthcat(1),mouthcat(2))
+                  100 format('(S1) Reach ',A,': outlet (',I6,',',I6,'), upa ',F8.0)
 
                   area = 0
                   rlen = 0
 
                   ij_this = mouthcat 
 
-                  do while (.true.)
+                  DO WHILE (.true.)
 
                      IF (get_lake(ij_this(1),ij_this(2)) > 0) THEN
-                        ! new river segment (case 2): lake outlet
+                        ! new river segment (CASE 2): lake outlet
                            
-                        call append_plist (mouthlist, ncat, ij_this(1), ij_this(2), check_exist = .false.)
+                        CALL append_plist (mouthlist, ncat, ij_this(1), ij_this(2), check_exist = .false.)
 
-                        IF (check_dup_mouth) THEN
-                           CALL check_duplicate_rivermouth ( &
-                              ij_this, rivermouth, nmouth, imouth, mouthmask)
-                        ENDIF
-                        exit
+                        EXIT
                      ENDIF
 
                      upa_up(:) = 0
 
-                     do idir = 1, 8
-                        call nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
+                     DO idir = 1, 8
+                        CALL nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
 
-                        if (((ij_this(1) /= i_up) .or. (ij_this(2) /= j_up)) &
-                           .and. within_region(i_up,j_up)) then
+                        IF (((ij_this(1) /= i_up) .or. (ij_this(2) /= j_up)) &
+                           .and. within_region(i_up,j_up)) THEN
                            dir_this = get_dir(i_up,j_up)
-                           if (dir_this == ishftc(int(8,1),idir)) then
+                           IF (dir_this == ishftc(int(8,1),idir)) THEN
                               upa_up(idir) = get_upa(i_up,j_up)
-                           end if
-                        end if
-                     end do
+                           ENDIF
+                        ENDIF
+                     ENDDO
 
                      area = area + sum(upa_up, mask=(upa_up<catsize))
                      nbranch = count(upa_up >= catsize)
@@ -273,56 +310,37 @@ CONTAINS
                         ! 3) area reaches threshold; 4) branch point; 5) head water
                      
                         IF ((nbranch == 1) &
-                           .and. ((ij_this(1) /= mouthcat(1)) .or. (ij_this(2) /= mouthcat(2)))) then
-                           ! new river segment (case 3): reach catchment threshold size.
+                           .and. ((ij_this(1) /= mouthcat(1)) .or. (ij_this(2) /= mouthcat(2)))) THEN
+                           ! new river segment (CASE 3): reach catchment threshold size.
                               
-                           call append_plist (mouthlist, ncat, ij_this(1), ij_this(2), check_exist = .false.)
+                           CALL append_plist (mouthlist, ncat, ij_this(1), ij_this(2), check_exist = .false.)
                               
-                           IF (check_dup_mouth) THEN
-                              CALL check_duplicate_rivermouth ( &
-                                 ij_this, rivermouth, nmouth, imouth, mouthmask)
-                           ENDIF
                         ELSE
                            
-                           call append_river (river, nriv, ij_this, icat)
+                           CALL append_river (river, nriv, ij_this, icat+thisinfo%icatdsp)
 
-                           IF (check_dup_mouth) THEN
-                              CALL check_duplicate_rivermouth ( &
-                                 ij_this, rivermouth, nmouth, imouth, mouthmask)
-                           ENDIF
-                          
-                           do ibranch = 1, nbranch
+                           DO ibranch = 1, nbranch
                               idir = maxloc(upa_up, dim = 1)
-                              call nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
+                              CALL nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
 
-                              ! new river segment (case 4): large branch
+                              ! new river segment (CASE 4): large branch
                                  
-                              call append_plist (mouthlist, ncat, i_up, j_up, check_exist = .false.)
+                              CALL append_plist (mouthlist, ncat, i_up, j_up, check_exist = .false.)
                            
-                              IF (check_dup_mouth) THEN
-                                 CALL check_duplicate_rivermouth ( &
-                                    (/i_up,j_up/), rivermouth, nmouth, imouth, mouthmask)
-                              ENDIF
-
                               upa_up(idir) = 0
-                           end do
+                           ENDDO
 
-                           do while ((area >= catsize) .and. any(upa_up > 0))
+                           DO WHILE ((area >= catsize) .and. any(upa_up > 0))
                               idir = maxloc(upa_up, dim = 1, mask=(upa_up<catsize))
-                              call nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
+                              CALL nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
 
-                              ! new river segment (case 5): add small branches 
+                              ! new river segment (CASE 5): add small branches 
 
-                              call append_plist (mouthlist, ncat, i_up, j_up, check_exist = .false.)
-
-                              IF (check_dup_mouth) THEN
-                                 CALL check_duplicate_rivermouth ( &
-                                    (/i_up,j_up/), rivermouth, nmouth, imouth, mouthmask)
-                              ENDIF
+                              CALL append_plist (mouthlist, ncat, i_up, j_up, check_exist = .false.)
 
                               area = area - upa_up(idir)
                               upa_up(idir) = 0
-                           end do
+                           ENDDO
                         ENDIF
 
                         EXIT
@@ -330,31 +348,22 @@ CONTAINS
                      ELSE ! (area < catsize) .and. (nbranch == 1)
 
                         ! append to current river
-                        call append_river (river, nriv, ij_this, icat)
+                        CALL append_river (river, nriv, ij_this, icat+thisinfo%icatdsp)
                                  
-                        IF (check_dup_mouth) THEN
-                           CALL check_duplicate_rivermouth ( &
-                              ij_this, rivermouth, nmouth, imouth, mouthmask)
-                        ENDIF
-
                         idir = maxloc(upa_up, dim = 1)
-                        call nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
+                        CALL nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
 
                         rlen = rlen + dist_between (i_up, j_up, ij_this(1), ij_this(2))
 
-                        if (rlen > rlen_max) then
-                           ! new river segment (case 6): too long river
+                        IF (rlen > rlen_max) THEN
+                           ! new river segment (CASE 6): too long river
                               
-                           call append_plist (mouthlist, ncat, i_up, j_up, check_exist = .true.)
+                           CALL append_plist (mouthlist, ncat, i_up, j_up, check_exist = .true.)
 
-                           IF (check_dup_mouth) THEN
-                              CALL check_duplicate_rivermouth ( &
-                                 (/i_up,j_up/), rivermouth, nmouth, imouth, mouthmask)
-                           ENDIF
-                           exit
-                        else
+                           EXIT
+                        ELSE
                            ij_this = (/i_up,j_up/)
-                        end if         
+                        ENDIF         
 
                      ENDIF
 
@@ -362,78 +371,70 @@ CONTAINS
 
                ELSE
                   ! lake
-                  write (*,101) mouthcat(1), mouthcat(2), get_upa(mouthcat(1),mouthcat(2))
-                  101 format('(S1) Lake : outlet (',I6,',',I6,'), upa ',F8.0)
+                  write (*,101) trim(binfo), mouthcat(1), mouthcat(2), get_upa(mouthcat(1),mouthcat(2))
+                  101 format('(S1) Lake  ',A,': outlet (',I6,',',I6,'), upa ',F8.0)
 
                   lakeid = get_lake(mouthcat(1),mouthcat(2))
                   
-                  call append_river (river, nriv, mouthcat, icat)
+                  CALL append_river (river, nriv, mouthcat, icat+thisinfo%icatdsp)
                                     
                   nplake = 0
                   CALL append_plist (lakelist, nplake, mouthcat(1), mouthcat(2), check_exist = .false.)
 
                   iplake = 1
                   DO WHILE (iplake <= nplake)
-                     do idir = 1, 8
-                        call nextij (lakelist(1,iplake), lakelist(2,iplake), &
+                     DO idir = 1, 8
+                        CALL nextij (lakelist(1,iplake), lakelist(2,iplake), &
                            ishftc(int(-128,1),idir), i_up, j_up)
 
-                        if (((lakelist(1,iplake) /= i_up) .or. (lakelist(2,iplake) /= j_up)) &
-                           .and. within_region(i_up,j_up)) then
-                           if (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) then
+                        IF (((lakelist(1,iplake) /= i_up) .or. (lakelist(2,iplake) /= j_up)) &
+                           .and. within_region(i_up,j_up)) THEN
+                           IF (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) THEN
                              
-                              if (get_lake(i_up,j_up) == lakeid) then
-                                 call append_plist (lakelist, nplake, i_up, j_up, check_exist = .false.)
-                              ELSEIF (get_upa(i_up,j_up) >= catsize) then
+                              IF (get_lake(i_up,j_up) == lakeid) THEN
+                                 CALL append_plist (lakelist, nplake, i_up, j_up, check_exist = .false.)
+                              ELSEIF (get_upa(i_up,j_up) >= catsize) THEN
                                  CALL append_plist (mouthlist, ncat, i_up, j_up, check_exist = .false.)
                               ENDIF 
                               
-                              IF (get_upa(i_up,j_up) >= catsize) then
-                                 IF (check_dup_mouth) THEN
-                                    CALL check_duplicate_rivermouth ( &
-                                       (/i_up,j_up/), rivermouth, nmouth, imouth, mouthmask)
-                                 ENDIF
-                              end if
-
-                           end if
-                        end if
-                     end do
+                           ENDIF
+                        ENDIF
+                     ENDDO
 
                      iplake = iplake + 1
-                  end do                     
+                  ENDDO                     
 
                ENDIF
-            end do
-         end do
+            ENDDO
+         ENDDO
 
 
          head = 0
-         do while (head < nriv)
+         DO WHILE (head < nriv)
 
             tail = head + 1
             iblk = (river(1,tail)-1)/nbox + 1
             jblk = (river(2,tail)-1)/mbox + 1
 
             head = tail
-            do while (head < nriv)
+            DO WHILE (head < nriv)
                iblk0 = (river(1,head+1)-1)/nbox + 1
                jblk0 = (river(2,head+1)-1)/mbox + 1
-               if ((iblk0 == iblk) .and. (jblk0 == jblk)) then
+               IF ((iblk0 == iblk) .and. (jblk0 == jblk)) THEN
                   head = head + 1
-               else
-                  exit
-               end if
-            end do
+               ELSE
+                  EXIT
+               ENDIF
+            ENDDO
 
-            idata = bkid(iblk,jblk)
-            call excute_data_task (t_update_river, idata)
-            call mpi_send (iblk, 1, MPI_INTEGER4, idata, t_update_river, p_comm_glb, p_err) 
-            call mpi_send (jblk, 1, MPI_INTEGER4, idata, t_update_river, p_comm_glb, p_err) 
-            call mpi_send (head-tail+1, 1, MPI_INTEGER4, idata, t_update_river, p_comm_glb, p_err) 
-            call mpi_send (river(:,tail:head), (head-tail+1)*3, MPI_INTEGER4, &
-               idata, t_update_river, p_comm_glb, p_err) 
+            CALL excute_data_task (t_update_river)
+            CALL mpi_send (iblk, 1, MPI_INTEGER4, p_data_address, t_update_river, p_comm_glb, p_err) 
+            CALL mpi_send (jblk, 1, MPI_INTEGER4, p_data_address, t_update_river, p_comm_glb, p_err) 
+            CALL mpi_send (head-tail+1, 1, MPI_INTEGER4, p_data_address, t_update_river, p_comm_glb, p_err) 
+            CALL mpi_send (river(:,tail:head), (head-tail+1)*3, MPI_INTEGER4, &
+               p_data_address, t_update_river, p_comm_glb, p_err) 
 
-         end do
+         ENDDO
 
          ! river length and elevations.
          allocate (rivlen (ncat))
@@ -444,11 +445,11 @@ CONTAINS
             tail = head + 1
             head = tail
             DO WHILE (head < nriv)
-               if (river(3,head+1) == river(3,head)) then
+               IF (river(3,head+1) == river(3,head)) THEN
                   head = head + 1
-               else
-                  exit
-               end if
+               ELSE
+                  EXIT
+               ENDIF
             ENDDO
 
             icat = icat + 1
@@ -467,14 +468,19 @@ CONTAINS
 
          ENDDO
 
-         call mpi_send (ncat,   1,    MPI_INTEGER, 0, 1, p_comm_work, p_err)
-         call mpi_send (rivlen, ncat, MPI_REAL4,   0, 1, p_comm_work, p_err)
-         call mpi_send (rivelv, ncat, MPI_REAL4,   0, 1, p_comm_work, p_err)
+         ! river length and elevations.
+         thisinfo%nrivseg = ncat
+         allocate (thisinfo%riv_len (ncat))
+         allocate (thisinfo%riv_elv (ncat))
+         thisinfo%riv_len = rivlen
+         thisinfo%riv_elv = rivelv
 
+         ! river pixels.
+         thisinfo%nrivpix = nriv
+         allocate (thisinfo%riv_pix (3,nriv))
+         thisinfo%riv_pix = river(:,1:nriv)
 
-         ! gather river pixels.
-         call mpi_send (nriv, 1, MPI_INTEGER, 0, 1, p_comm_work, p_err)
-         call mpi_send (river(:,1:nriv), nriv*3, MPI_INTEGER, 0, 1, p_comm_work, p_err)
+         CALL excute_data_task (t_exit)
 
          IF (allocated(river)     )   deallocate (river)
          IF (allocated(rivermouth))   deallocate (rivermouth)
@@ -482,35 +488,11 @@ CONTAINS
          IF (allocated(rivlen)    )   deallocate (rivlen)
          IF (allocated(rivelv)    )   deallocate (rivelv)
          IF (allocated(lakelist  ))   deallocate (lakelist)
-         IF (allocated(mouthmask ))   deallocate (mouthmask)
 
-      end if
-
-      call mpi_barrier (p_comm_glb, p_err)
-
-   end subroutine get_river_lake
-
-   ! -- --
-   SUBROUTINE check_duplicate_rivermouth (ij, rivmth, nm, im, mmsk)
-      
-      use hydro_data_mod
-      IMPLICIT NONE
-
-      integer, intent(in)    :: ij(2), nm, rivmth(2,nm), im
-      logical, intent(inout) :: mmsk(nm)
-
-      ! Local
-      integer :: jm
-
-      IF (    (ij(1) == inorth) .or. (ij(1) == isouth)  &
-         .or. (ij(2) == jwest ) .or. (ij(2) == jeast ))  THEN
-         DO jm= im+1, nm
-            IF ((rivmth(1,jm) == ij(1)) .and. (rivmth(2,jm) == ij(2)) ) THEN
-               mmsk(jm) = .false.
-            ENDIF
-         ENDDO
       ENDIF
 
-   END SUBROUTINE check_duplicate_rivermouth
+      CALL mpi_barrier (p_comm_glb, p_err)
+
+   END SUBROUTINE get_river_lake
 
 END MODULE river_lake_mod

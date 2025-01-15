@@ -30,11 +30,11 @@ CONTAINS
 
    ! ----
    SUBROUTINE nccheck (status)
-      INTEGER, INTENT(IN) :: status
+      integer, intent(in) :: status
 
       IF (status /= NF90_NOERR) THEN
          print *, trim(nf90_strerror(status))
-         stop 2
+         STOP 2
       ENDIF
    END SUBROUTINE nccheck
 
@@ -44,10 +44,10 @@ CONTAINS
       USE netcdf
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in)  :: filename
+      character(len=*), intent(in)  :: filename
 
       ! Local Variables
-      INTEGER :: ncid
+      integer :: ncid
 
       CALL nccheck( nf90_create(trim(filename), ior(NF90_CLOBBER,NF90_NETCDF4), ncid) )
       CALL nccheck( nf90_close(ncid) )
@@ -60,13 +60,13 @@ CONTAINS
       USE netcdf
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      INTEGER, allocatable, intent(out) :: varsize(:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      integer, allocatable, intent(out) :: varsize(:)
 
       ! Local variables
-      INTEGER :: ncid, varid, ndims, idm
-      INTEGER, allocatable :: dimids(:)
+      integer :: ncid, varid, ndims, idm
+      integer, allocatable :: dimids(:)
 
       CALL nccheck( nf90_open(trim(filename), NF90_NOWRITE, ncid) )
       CALL nccheck( nf90_inq_varid(ncid, trim(dataname), varid) )
@@ -91,13 +91,13 @@ CONTAINS
       USE netcdf
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      INTEGER, intent(out) :: length
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      integer, intent(out) :: length
 
       ! Local variables
-      INTEGER :: ncid, varid, ndims
-      INTEGER, allocatable :: dimids(:)
+      integer :: ncid, varid, ndims
+      integer, allocatable :: dimids(:)
 
       CALL nccheck( nf90_open(trim(filename), NF90_NOWRITE, ncid) )
       CALL nccheck( nf90_inq_varid(ncid, trim(dataname), varid) )
@@ -119,13 +119,13 @@ CONTAINS
       USE precision
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      REAL(r8), allocatable, intent(out) :: rdata (:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      real(r8), allocatable, intent(out) :: rdata (:)
 
       ! Local variables
-      INTEGER :: ncid, varid
-      INTEGER, allocatable :: varsize(:)
+      integer :: ncid, varid
+      integer, allocatable :: varsize(:)
 
       CALL ncio_inquire_varsize(filename, dataname, varsize)
       allocate (rdata (varsize(1)) )
@@ -145,13 +145,13 @@ CONTAINS
       USE netcdf
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      INTEGER(1), allocatable, intent(out) :: rdata (:,:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      integer(1), allocatable, intent(out) :: rdata (:,:)
 
       ! Local variables
-      INTEGER :: ncid, varid
-      INTEGER, allocatable :: varsize(:)
+      integer :: ncid, varid
+      integer, allocatable :: varsize(:)
 
       CALL ncio_inquire_varsize(filename, dataname, varsize)
       allocate (rdata (varsize(1), varsize(2)) )
@@ -171,13 +171,13 @@ CONTAINS
       USE netcdf
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      INTEGER(4), allocatable, intent(out) :: rdata (:,:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      integer(4), allocatable, intent(out) :: rdata (:,:)
 
       ! Local variables
-      INTEGER :: ncid, varid
-      INTEGER, allocatable :: varsize(:)
+      integer :: ncid, varid
+      integer, allocatable :: varsize(:)
 
       CALL ncio_inquire_varsize(filename, dataname, varsize)
       allocate (rdata (varsize(1), varsize(2)) )
@@ -198,13 +198,13 @@ CONTAINS
       USE precision
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      REAL(4), allocatable, intent(out) :: rdata (:,:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      real(4), allocatable, intent(out) :: rdata (:,:)
 
       ! Local variables
-      INTEGER :: ncid, varid
-      INTEGER, allocatable :: varsize(:)
+      integer :: ncid, varid
+      integer, allocatable :: varsize(:)
 
       CALL ncio_inquire_varsize(filename, dataname, varsize)
       allocate (rdata (varsize(1), varsize(2)) )
@@ -225,12 +225,12 @@ CONTAINS
       USE precision
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dimname
-      INTEGER, intent(in) :: dimlen
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dimname
+      integer, intent(in) :: dimlen
 
       ! Local variables
-      INTEGER :: ncid, dimid, status
+      integer :: ncid, dimid, status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
 
@@ -269,18 +269,39 @@ CONTAINS
 
    END SUBROUTINE ncio_put_attr_str
 
+   ! ----
+   SUBROUTINE ncio_put_attr_real4 (filename, varname, attrname, attrval)
+
+   USE netcdf
+   IMPLICIT NONE
+
+   character(len=*), intent(in)  :: filename, varname, attrname
+   real(kind = 4),   intent(in)  :: attrval
+
+   ! Local Variables
+   integer :: ncid, varid
+
+      CALL nccheck( nf90_open (trim(filename), NF90_WRITE, ncid) )
+      CALL nccheck (nf90_inq_varid (ncid, trim(varname), varid))
+      CALL nccheck (nf90_redef (ncid))
+      CALL nccheck (nf90_put_att (ncid, varid, trim(attrname), attrval))
+      CALL nccheck (nf90_enddef (ncid))
+      CALL nccheck( nf90_close (ncid))
+
+   END SUBROUTINE ncio_put_attr_real4
+
    !---------------------------------------------------------
    SUBROUTINE ncio_write_serial_int32_0d (filename, dataname, wdata)
 
       USE netcdf
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      INTEGER, intent(in) :: wdata 
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      integer, intent(in) :: wdata 
 
       ! Local variables
-      INTEGER :: ncid, varid, status
+      integer :: ncid, varid, status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
       status = nf90_inq_varid(ncid, trim(dataname), varid)
@@ -301,15 +322,15 @@ CONTAINS
       USE netcdf
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      INTEGER, intent(in) :: wdata (:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      integer, intent(in) :: wdata (:)
 
-      CHARACTER(len=*), intent(in), optional :: dimname
-      INTEGER, intent(in), optional :: compress
+      character(len=*), intent(in), optional :: dimname
+      integer, intent(in), optional :: compress
 
       ! Local variables
-      INTEGER :: ncid, varid, dimid, status
+      integer :: ncid, varid, dimid, status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
       status = nf90_inq_varid(ncid, trim(dataname), varid)
@@ -344,15 +365,15 @@ CONTAINS
       USE precision
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      REAL(r8), intent(in) :: wdata (:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      real(r8), intent(in) :: wdata (:)
 
-      CHARACTER(len=*), intent(in), optional :: dimname
-      INTEGER, intent(in), optional :: compress
+      character(len=*), intent(in), optional :: dimname
+      integer, intent(in), optional :: compress
 
       ! Local variables
-      INTEGER :: ncid, varid, dimid, status
+      integer :: ncid, varid, dimid, status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
       status = nf90_inq_varid(ncid, trim(dataname), varid)
@@ -387,15 +408,15 @@ CONTAINS
       USE precision
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      REAL(kind = 4), intent(in) :: wdata (:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      real(kind = 4), intent(in) :: wdata (:)
 
-      CHARACTER(len=*), intent(in), optional :: dimname
-      INTEGER, intent(in), optional :: compress
+      character(len=*), intent(in), optional :: dimname
+      integer, intent(in), optional :: compress
 
       ! Local variables
-      INTEGER :: ncid, varid, dimid, status
+      integer :: ncid, varid, dimid, status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
       status = nf90_inq_varid(ncid, trim(dataname), varid)
@@ -430,15 +451,15 @@ CONTAINS
       USE netcdf
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      INTEGER(1), intent(in) :: wdata (:,:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      integer(1), intent(in) :: wdata (:,:)
       
-      CHARACTER(len=*), intent(in), optional :: dim1name, dim2name
-      INTEGER, intent(in), optional :: compress
+      character(len=*), intent(in), optional :: dim1name, dim2name
+      integer, intent(in), optional :: compress
 
       ! Local variables
-      INTEGER :: ncid, varid, dimid(2), status
+      integer :: ncid, varid, dimid(2), status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
       status = nf90_inq_varid(ncid, trim(dataname), varid)
@@ -474,15 +495,15 @@ CONTAINS
       USE netcdf
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      INTEGER(2), intent(in) :: wdata (:,:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      integer(2), intent(in) :: wdata (:,:)
       
-      CHARACTER(len=*), intent(in), optional :: dim1name, dim2name
-      INTEGER, intent(in), optional :: compress
+      character(len=*), intent(in), optional :: dim1name, dim2name
+      integer, intent(in), optional :: compress
 
       ! Local variables
-      INTEGER :: ncid, varid, dimid(2), status
+      integer :: ncid, varid, dimid(2), status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
       status = nf90_inq_varid(ncid, trim(dataname), varid)
@@ -518,15 +539,15 @@ CONTAINS
       USE netcdf
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      INTEGER, intent(in) :: wdata (:,:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      integer, intent(in) :: wdata (:,:)
       
-      CHARACTER(len=*), intent(in), optional :: dim1name, dim2name
-      INTEGER, intent(in), optional :: compress
+      character(len=*), intent(in), optional :: dim1name, dim2name
+      integer, intent(in), optional :: compress
 
       ! Local variables
-      INTEGER :: ncid, varid, dimid(2), status
+      integer :: ncid, varid, dimid(2), status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
       status = nf90_inq_varid(ncid, trim(dataname), varid)
@@ -563,15 +584,15 @@ CONTAINS
       USE precision
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      REAL(4), intent(in) :: wdata (:,:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      real(4), intent(in) :: wdata (:,:)
       
-      CHARACTER(len=*), intent(in), optional :: dim1name, dim2name
-      INTEGER, intent(in), optional :: compress
+      character(len=*), intent(in), optional :: dim1name, dim2name
+      integer, intent(in), optional :: compress
 
       ! Local variables
-      INTEGER :: ncid, varid, dimid(2), status
+      integer :: ncid, varid, dimid(2), status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
       status = nf90_inq_varid(ncid, trim(dataname), varid)
@@ -608,15 +629,15 @@ CONTAINS
       USE precision
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      REAL(r8), intent(in) :: wdata (:,:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      real(r8), intent(in) :: wdata (:,:)
       
-      CHARACTER(len=*), intent(in), optional :: dim1name, dim2name
-      INTEGER, intent(in), optional :: compress
+      character(len=*), intent(in), optional :: dim1name, dim2name
+      integer, intent(in), optional :: compress
 
       ! Local variables
-      INTEGER :: ncid, varid, dimid(2), status
+      integer :: ncid, varid, dimid(2), status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
       status = nf90_inq_varid(ncid, trim(dataname), varid)
@@ -652,15 +673,15 @@ CONTAINS
       USE netcdf
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      INTEGER, intent(in) :: wdata (:,:,:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      integer, intent(in) :: wdata (:,:,:)
       
-      CHARACTER(len=*), intent(in), optional :: dim1name, dim2name, dim3name
-      INTEGER, intent(in), optional :: compress
+      character(len=*), intent(in), optional :: dim1name, dim2name, dim3name
+      integer, intent(in), optional :: compress
 
       ! Local variables
-      INTEGER :: ncid, varid, dimid(3), status
+      integer :: ncid, varid, dimid(3), status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
       status = nf90_inq_varid(ncid, trim(dataname), varid)
@@ -698,15 +719,15 @@ CONTAINS
       USE precision
       IMPLICIT NONE
 
-      CHARACTER(len=*), intent(in) :: filename
-      CHARACTER(len=*), intent(in) :: dataname
-      REAL(r8), intent(in) :: wdata (:,:,:)
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      real(r8), intent(in) :: wdata (:,:,:)
       
-      CHARACTER(len=*), intent(in), optional :: dim1name, dim2name, dim3name
-      INTEGER, intent(in), optional :: compress
+      character(len=*), intent(in), optional :: dim1name, dim2name, dim3name
+      integer, intent(in), optional :: compress
 
       ! Local variables
-      INTEGER :: ncid, varid, dimid(3), status
+      integer :: ncid, varid, dimid(3), status
 
       CALL nccheck( nf90_open(trim(filename), NF90_WRITE, ncid) )
       status = nf90_inq_varid(ncid, trim(dataname), varid)

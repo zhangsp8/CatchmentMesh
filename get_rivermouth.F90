@@ -1,8 +1,8 @@
 PROGRAM get_rivermouth
 
-   use task_mod
-   use hydro_data_mod
-   implicit none
+   USE task_mod
+   USE hydro_data_mod
+   IMPLICIT NONE
    
    character(len=256) :: hydro_dir, output_dir, casename, storage_type
    character(len=256) :: nlfile
@@ -22,86 +22,86 @@ PROGRAM get_rivermouth
       hydro_dir, output_dir, casename, storage_type, &
       catsize, nlev_max, west, east, south, north
 
-   call task_init  ()
+   CALL task_init  ()
 
-   if (p_is_master)  THEN
+   IF (p_is_master)  THEN
       CALL getarg (1, nlfile)
       open (10, status='OLD', file=nlfile, form="FORMATTED")
       read (10, nml=catexp)
       close(10)
    ENDIF
 
-   call mpi_bcast (hydro_dir,    256, MPI_CHARACTER, 0, p_comm_glb, p_err)
-   call mpi_bcast (output_dir,   256, MPI_CHARACTER, 0, p_comm_glb, p_err)
-   call mpi_bcast (casename,     256, MPI_CHARACTER, 0, p_comm_glb, p_err)
-   call mpi_bcast (storage_type, 256, MPI_CHARACTER, 0, p_comm_glb, p_err)
-   call mpi_bcast (catsize,  1, MPI_REAL4,   0, p_comm_glb, p_err)
-   call mpi_bcast (nlev_max, 1, MPI_INTEGER, 0, p_comm_glb, p_err)
-   call mpi_bcast (west,  1, MPI_REAL4, 0, p_comm_glb, p_err)
-   call mpi_bcast (east,  1, MPI_REAL4, 0, p_comm_glb, p_err)
-   call mpi_bcast (south, 1, MPI_REAL4, 0, p_comm_glb, p_err)
-   call mpi_bcast (north, 1, MPI_REAL4, 0, p_comm_glb, p_err)
+   CALL mpi_bcast (hydro_dir,    256, MPI_CHARACTER, 0, p_comm_glb, p_err)
+   CALL mpi_bcast (output_dir,   256, MPI_CHARACTER, 0, p_comm_glb, p_err)
+   CALL mpi_bcast (casename,     256, MPI_CHARACTER, 0, p_comm_glb, p_err)
+   CALL mpi_bcast (storage_type, 256, MPI_CHARACTER, 0, p_comm_glb, p_err)
+   CALL mpi_bcast (catsize,  1, MPI_REAL4,   0, p_comm_glb, p_err)
+   CALL mpi_bcast (nlev_max, 1, MPI_INTEGER, 0, p_comm_glb, p_err)
+   CALL mpi_bcast (west,  1, MPI_REAL4, 0, p_comm_glb, p_err)
+   CALL mpi_bcast (east,  1, MPI_REAL4, 0, p_comm_glb, p_err)
+   CALL mpi_bcast (south, 1, MPI_REAL4, 0, p_comm_glb, p_err)
+   CALL mpi_bcast (north, 1, MPI_REAL4, 0, p_comm_glb, p_err)
    
    ! Step 0: Initializing data and work.
-   if (p_is_master) write(*,*) 'Step 0: Data and Work specialization ...'
-   call get_region (hydro_dir, west, east, north, south)
-   call divide_data_and_work (count(bkid==0))
+   IF (p_is_master) write(*,*) 'Step 0: Data and Work specialization ...'
+   CALL get_region (hydro_dir, west, east, north, south)
+   CALL divide_data_and_work (count(bkid==0))
 
-   if (p_is_master) write(*,'(/A)') 'Step 0: Loading input data ...'
-   call readin_blocks (hydro_dir)
+   IF (p_is_master) write(*,'(/A)') 'Step 0: Loading input data ...'
+   CALL readin_blocks (hydro_dir)
 
-   call init_area ()
+   CALL init_area ()
 
    CALL mpi_barrier (p_comm_glb)
 
-   if (p_is_data) then
+   IF (p_is_data) THEN
 
-      do jblk = 1, mblock
-         do iblk = 1, nblock
-            if (bkid(iblk,jblk) == p_iam_glb) then
-               do j = 1, mbox
-                  do i = 1, nbox
-                     if (blks(iblk,jblk)%icat(i,j) == 0) then
+      DO jblk = 1, mblock
+         DO iblk = 1, nblock
+            IF (bkid(iblk,jblk) == p_iam_glb) THEN
+               DO j = 1, mbox
+                  DO i = 1, nbox
+                     IF (blks(iblk,jblk)%icat(i,j) == 0) THEN
                         ! river mouth and inland depression.
                         IF ((blks(iblk,jblk)%dir(i,j) == 0) .or. (blks(iblk,jblk)%dir(i,j) == -1)) THEN
                            i_up = blks(iblk,jblk)%idsp + i
                            j_up = blks(iblk,jblk)%jdsp + j
-                           call mpi_send (p_iam_glb, 1, MPI_INTEGER, 0, 0, p_comm_glb, p_err) 
-                           call mpi_send (i_up, 1, MPI_INTEGER, 0, 1, p_comm_glb, p_err) 
-                           call mpi_send (j_up, 1, MPI_INTEGER, 0, 1, p_comm_glb, p_err) 
-                           call mpi_send (blks(iblk,jblk)%upa(i,j), 1, MPI_REAL4, 0, 1, p_comm_glb, p_err) 
-                        end if
-                     end if
-                  end do
-               end do
-            end if
-         end do
-      end do
+                           CALL mpi_send (p_iam_glb, 1, MPI_INTEGER, 0, 0, p_comm_glb, p_err) 
+                           CALL mpi_send (i_up, 1, MPI_INTEGER, 0, 1, p_comm_glb, p_err) 
+                           CALL mpi_send (j_up, 1, MPI_INTEGER, 0, 1, p_comm_glb, p_err) 
+                           CALL mpi_send (blks(iblk,jblk)%upa(i,j), 1, MPI_REAL4, 0, 1, p_comm_glb, p_err) 
+                        ENDIF
+                     ENDIF
+                  ENDDO
+               ENDDO
+            ENDIF
+         ENDDO
+      ENDDO
                               
-      call mpi_send (-1, 1, MPI_INTEGER, 0, 0, p_comm_glb, p_err) 
+      CALL mpi_send (-1, 1, MPI_INTEGER, 0, 0, p_comm_glb, p_err) 
 
-   elseif (p_is_master) THEN
+   ELSEIF (p_is_master) THEN
 
       ndone = 0
       DO WHILE (.true.)
-         call mpi_recv (iproc, 1, MPI_INTEGER, MPI_ANY_SOURCE, 0, p_comm_glb, p_stat, p_err)
+         CALL mpi_recv (iproc, 1, MPI_INTEGER, MPI_ANY_SOURCE, 0, p_comm_glb, p_stat, p_err)
 
          IF (iproc > 0) THEN
-            call mpi_recv (i_up,  1, MPI_INTEGER, iproc, 1, p_comm_glb, p_stat, p_err)
-            call mpi_recv (j_up,  1, MPI_INTEGER, iproc, 1, p_comm_glb, p_stat, p_err)
-            call mpi_recv (upa,   1, MPI_REAL4,   iproc, 1, p_comm_glb, p_stat, p_err)
+            CALL mpi_recv (i_up,  1, MPI_INTEGER, iproc, 1, p_comm_glb, p_stat, p_err)
+            CALL mpi_recv (j_up,  1, MPI_INTEGER, iproc, 1, p_comm_glb, p_stat, p_err)
+            CALL mpi_recv (upa,   1, MPI_REAL4,   iproc, 1, p_comm_glb, p_stat, p_err)
             write (*,'(I7,I7,E20.6)') i_up, j_up, upa
          ELSE
             ndone = ndone + 1
          ENDIF
 
-         IF (ndone == p_ndata) exit
+         IF (ndone == p_ndata) EXIT
       ENDDO
 
-   end if
+   ENDIF
    
-   call free_memory ()
+   CALL free_memory ()
 
-   call task_final ()
+   CALL task_final ()
 
-end PROGRAM get_rivermouth
+END PROGRAM get_rivermouth

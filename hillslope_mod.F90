@@ -1,24 +1,27 @@
 MODULE hillslope_mod
 
+   USE river_lake_mod, only: binfo
+
 CONTAINS
 
-   subroutine get_hillslope_hydrounits (catsize, lakecellsize, nlev_max, maxhunum)
+   SUBROUTINE get_hillslope_hydrounits (catsize, lakecellsize, nlev_max, maxhunum)
 
-      use task_mod
+      USE task_mod
       USE utils_mod
-      use hydro_data_mod
+      USE hydro_data_mod
 
-      implicit none
+      IMPLICIT NONE
 
       real    (kind=4), intent(in)  :: catsize
       real    (kind=4), intent(in)  :: lakecellsize
       integer (kind=4), intent(in)  :: nlev_max
-      integer (kind=4), intent(out) :: maxhunum
+
+      integer (kind=4), intent(inout) :: maxhunum
 
       real    (kind=4) :: levsize
 
-      REAL    (kind=8), allocatable :: longitude(:)    
-      REAL    (kind=8), allocatable :: latitude (:)    
+      real    (kind=8), allocatable :: longitude(:)    
+      real    (kind=8), allocatable :: latitude (:)    
 
       integer (kind=4), allocatable :: catch (:,:)    
       integer (kind=1), allocatable :: dir   (:,:)    
@@ -27,7 +30,7 @@ CONTAINS
       integer (kind=4), allocatable :: hunit (:,:)    
       logical, allocatable :: hmask (:,:)
 
-      integer (kind=4) :: icat, jcat
+      integer (kind=4) :: icat
       integer (kind=4) :: catnum, lakeid, imin, imax, jmin, jmax
       integer (kind=4) :: bnds(6)
       logical :: end_of_data
@@ -35,28 +38,21 @@ CONTAINS
       integer (kind=4) :: np, mp, dsize 
       integer (kind=4) :: i, j, iblk, jblk, iblk1, jblk1
       integer (kind=4) :: i0, i1, j0, j1, il0, il1, jl0, jl1
-      integer (kind=4) :: idata, iwork, ndone
+      integer (kind=4) :: iwork, ndone
       integer (kind=4) :: jlon
       integer (kind=4) :: mesg(4), zero
 
       integer (kind=4), allocatable :: hulist(:)
       integer (kind=4) :: iloc
 
-      LOGICAL, allocatable :: catdone(:)
 
       ! Dividing catchment into units.
-      if (p_is_master) then
+      IF (p_is_master) THEN
 
-         write(*,'(/A/)') 'Step 3 : Finding all hillslope units and lake elements ...'
-
-         maxhunum = 0
+         write(*,'(/3A/)') 'Step 3 ',trim(binfo),': Finding all hillslope units and lake elements ...'
 
          icat = 1
          ndone = 0
-
-         allocate(catdone(ntotalcat))
-         catdone = .false.
-         jcat = 0
 
          DO WHILE (.true.)
 
@@ -65,55 +61,50 @@ CONTAINS
 
             iwork = mesg(1)
 
-            IF (icat <= ntotalcat) THEN
+            IF (icat <= thisinfo%ntotalcat) THEN
 
-               jcat = mod(jcat+1234, ntotalcat) + 1
-               DO WHILE (catdone(jcat))
-                  jcat = mod(jcat+1,ntotalcat)+1
-               ENDDO
-               catdone(jcat) = .true.
+               catnum = icat + thisinfo%icatdsp
+               CALL mpi_send (catnum, 1, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
+               CALL mpi_send (thisinfo%lake_id   (icat), 1, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
+               CALL mpi_send (thisinfo%bsn_bnds(:,icat), 4, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
 
-               call mpi_send (jcat, 1, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
-               call mpi_send (lake_info_id   (jcat), 1, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
-               call mpi_send (bsn_info_bnds(:,jcat), 4, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
-
-               write(*,100) jcat, bsn_info_bnds(:,jcat), icat, ntotalcat
-               100 format('(S3) Hillslopes and Lake Elements: ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
+               write(*,100) trim(binfo), catnum, thisinfo%bsn_bnds(:,icat), icat, thisinfo%ntotalcat
+               100 format('(S3) Hillslopes and Lake Elements ',A,': ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
                   '(', I8, '/', I8, ') in progress.') 
 
                icat = icat + 1
             ELSE
                zero = 0
-               call mpi_send (zero, 1, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
+               CALL mpi_send (zero, 1, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
                ndone = ndone + 1
             ENDIF
 
             maxhunum = max(mesg(2), maxhunum)
 
-            IF (ndone == p_nwork) exit
+            IF (ndone == p_nwork) EXIT
          ENDDO
 
-         call mpi_barrier (p_comm_work, p_err)
-         call excute_data_task (t_exit)
+         CALL mpi_barrier (p_comm_work, p_err)
+         CALL excute_data_task (t_exit)
 
-      elseif (p_is_data) then
+      ELSEIF (p_is_data) THEN
 
-         call data_daemon ()
+         CALL data_daemon ()
 
-      elseif (p_is_work) then
+      ELSEIF (p_is_work) THEN
 
-         CALL sync_window ()
+         ! CALL sync_window ()
 
          levsize = catsize / nlev_max
 
          mesg(1:2) = (/p_iam_work, 0/)
-         call mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
+         CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
 
          DO WHILE (.true.)
 
             CALL mpi_recv (catnum, 1, MPI_INTEGER, 0, 1, p_comm_work, p_stat, p_err)
 
-            IF (catnum == 0) exit
+            IF (catnum == 0) EXIT
 
             CALL mpi_recv (lakeid,    1, MPI_INTEGER, 0, 1, p_comm_work, p_stat, p_err)
             CALL mpi_recv (mesg(1:4), 4, MPI_INTEGER, 0, 1, p_comm_work, p_stat, p_err)
@@ -125,7 +116,7 @@ CONTAINS
 
             np = imax - imin + 1
             mp = jmax - jmin + 1
-            if (mp < 0) mp = mp + mglb
+            IF (mp < 0) mp = mp + mglb
             dsize = np * mp
 
             allocate (longitude(mp))
@@ -134,66 +125,63 @@ CONTAINS
             allocate (dir   (np,mp))
             allocate (hnd   (np,mp))
 
-            call aggregate_data (imin, imax, jmin, jmax, & 
+            CALL aggregate_data (imin, imax, jmin, jmax, & 
                np, mp, longitude, latitude, &
                icat = catch, dir = dir, hnd = hnd)
 
             allocate (area (np,mp))
-            do j = 1, mp
-               do i = 1, np
+            DO j = 1, mp
+               DO i = 1, np
                   jlon = j + jmin - 1
-                  if (jlon > mglb) jlon = jlon - mglb
+                  IF (jlon > mglb) jlon = jlon - mglb
 
                   area (i,j) = get_area (i+imin-1,jlon)
-               end do
-            end do
+               ENDDO
+            ENDDO
 
             allocate (hmask (np,mp))
             allocate (hunit (np,mp))
 
             hmask = (catch == catnum) 
-            if (any(hmask)) then
+            IF (any(hmask)) THEN
                IF (lakeid <= 0) THEN
-                  call divide_hillslope_into_hydrounits ( lakeid, &
+                  CALL divide_hillslope_into_hydrounits ( lakeid, &
                      np, mp, dir, hnd, area, hmask, levsize, hunit) 
                ELSE
                   CALL divide_lake (lakeid, np, mp, area, hmask, lakecellsize, hunit)
                ENDIF
-            end if
+            ENDIF
 
             iblk = (imin-1)/nbox + 1
             jblk = (jmin-1)/mbox + 1
-            do while (.true.)
-               call block_iterator (imin, imax, jmin, jmax, iblk, jblk, &
+            DO WHILE (.true.)
+               CALL block_iterator (imin, imax, jmin, jmax, iblk, jblk, &
                   i0, i1, j0, j1, il0, il1, jl0, jl1, &
                   iblk1, jblk1, end_of_data)
+                  
+               bnds  = (/iblk,jblk,i0,i1,j0,j1/)
 
-               idata = bkid(iblk,jblk)
+               dsize = (j1-j0+1)*(i1-i0+1)
 
-               if (idata /= -1) then
-                  bnds  = (/iblk,jblk,i0,i1,j0,j1/)
-                  dsize = (j1-j0+1)*(i1-i0+1)
+               CALL excute_data_task (t_update_hunit)
+               CALL mpi_send (catnum, 1, MPI_INTEGER, p_data_address, t_update_hunit, p_comm_glb, p_err) 
+               CALL mpi_send (bnds,   6, MPI_INTEGER, p_data_address, t_update_hunit, p_comm_glb, p_err) 
+               CALL mpi_send (hunit(il0:il1,jl0:jl1), dsize, MPI_INTEGER, p_data_address, &
+                  t_update_hunit, p_comm_glb, p_err)
 
-                  call excute_data_task (t_update_hunit, idata)
-                  call mpi_send (catnum, 1, MPI_INTEGER, idata, t_update_hunit, p_comm_glb, p_err) 
-                  call mpi_send (bnds,   6, MPI_INTEGER, idata, t_update_hunit, p_comm_glb, p_err) 
-                  call mpi_send (hunit(il0:il1,jl0:jl1), dsize, MPI_INTEGER, idata, &
-                     t_update_hunit, p_comm_glb, p_err)
-               end if
-
-               if (end_of_data) then
-                  exit
-               else
+               IF (end_of_data) THEN
+                  EXIT
+               ELSE
                   iblk = iblk1; jblk = jblk1
-               end if
-            end do
+               ENDIF
+            ENDDO
 
             maxhunum = 0
             
             IF (lakeid <= 0) THEN
                allocate (hulist(np*mp))
-               do j = 1, mp
-                  do i = 1, np
+               DO j = 1, mp
+                  DO i = 1, np
                      IF (catch(i,j) == catnum) THEN
                         CALL insert_into_sorted_list1 (hunit(i,j), maxhunum, hulist, iloc)
                      ENDIF
@@ -203,7 +191,7 @@ CONTAINS
             ENDIF
 
             mesg(1:2) = (/p_iam_work, maxhunum/)
-            call mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
+            CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
 
             deallocate (longitude)
             deallocate (latitude )
@@ -214,28 +202,28 @@ CONTAINS
             deallocate (hmask)
             deallocate (hunit)
 
-         end do
+         ENDDO
 
-         call mpi_barrier (p_comm_work, p_err)
+         CALL mpi_barrier (p_comm_work, p_err)
 
-      end if
+      ENDIF
 
-   end subroutine get_hillslope_hydrounits
+   END SUBROUTINE get_hillslope_hydrounits
 
 
-   subroutine divide_hillslope_into_hydrounits ( lakeid, &
+   SUBROUTINE divide_hillslope_into_hydrounits ( lakeid, &
          np, mp, dir, hnd, area, hmask, levsize, &
          hunit)
 
-      use utils_mod
-      use hydro_data_mod
+      USE utils_mod
+      USE hydro_data_mod
 
       ! Flow direction is prepared in 1-byte SIGNED integer (int8) and is defined as:
       !    1: east, 2: southeast, 4: south, 8: southwest, 16: west, 32: northwest, 64: north. 128: northeast
       !    0: river mouth, -1: inland depression, -9: undefined (ocean)
-      ! If a flow direction file is opened as UNSIGNED integer, undefined=247 and inland depression=255
+      ! IF a flow direction file is opened as UNSIGNED integer, undefined=247 and inland depression=255
 
-      implicit none
+      IMPLICIT NONE
 
       integer :: lakeid
 
@@ -270,16 +258,16 @@ CONTAINS
       real (kind = 4) :: harea, area_this
       real (kind = 4), allocatable :: area_unit(:)
 
-      integer (kind = 4) :: nborder
-      integer (kind = 4), allocatable :: blist(:,:)
+      logical :: found
+      integer (kind = 4) :: fstloc, inb, jnb
 
       integer (kind = 4) :: hdown (np,mp)    
       integer (kind = 4) :: inode, nnode
       integer (kind = 4), allocatable :: route (:, :)
 
-      LOGICAL (kind = 4), allocatable :: is_neighbour(:,:), small_units (:)
-      INTEGER (kind = 4) :: unitneighbour
-      REAL    (kind = 4) :: areaneighbour
+      logical (kind = 4), allocatable :: is_neighbour(:,:), small_units (:)
+      integer (kind = 4) :: unitneighbour
+      real    (kind = 4) :: areaneighbour
 
       integer (kind = 4), allocatable :: iunit_next (:)
       integer (kind = 4) :: nisland
@@ -292,20 +280,20 @@ CONTAINS
          msk = hmask 
       ENDIF
 
-      where (hmask) 
+      WHERE (hmask) 
          hunit = 0
-      END where
-      where (msk)   
+      END WHERE
+      WHERE (msk)   
          hunit = -1
-      END where
+      END WHERE
 
       harea = sum(area, mask=msk)
 
-      if (harea < levsize * 1.2) then
-         where (msk) 
+      IF (harea < levsize * 1.2) THEN
+         WHERE (msk) 
             hunit = 1
-         END where
-      else
+         END WHERE
+      ELSE
 
          ! divide catchment into hillslope levels
          npxl = count(msk)
@@ -314,31 +302,30 @@ CONTAINS
          allocate (order1d (npxl))
 
          allocate (ij_sorted (2,npxl))
-         allocate (blist     (2,npxl))
          allocate (route     (2,npxl))
 
          h1d = pack(hnd, msk)
 
          order1d = (/ (ipxl, ipxl = 1, npxl) /)
 
-         call quicksort (npxl, h1d, order1d)
+         CALL quicksort (npxl, h1d, order1d)
 
          order1d(order1d) = (/ (ipxl, ipxl = 1, npxl) /)
          order2d = unpack(order1d, msk, -1)
 
-         do j = 1, mp
-            do i = 1, np
-               if (msk(i,j)) then
+         DO j = 1, mp
+            DO i = 1, np
+               IF (msk(i,j)) THEN
                   ij_sorted(:,order2d(i,j)) = (/i,j/)
-               end if
-            end do
-         end do
+               ENDIF
+            ENDDO
+         ENDDO
 
          IF (lakeid < 0) THEN
             area_this = 0
-            do j = 1, mp
-               do i = 1, np
-                  call nextij (i,j, dir(i,j),inext,jnext, is_local = .true.)
+            DO j = 1, mp
+               DO i = 1, np
+                  CALL nextij (i,j, dir(i,j),inext,jnext, is_local = .true.)
                   IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN 
                      IF (.not. hmask(inext,jnext)) THEN
                         hunit(i,j) = 1
@@ -353,67 +340,90 @@ CONTAINS
          ENDIF
 
          nunit = 0
-         do while (any(hmask .and. (hunit == -1)))
+         fstloc = 1
+         DO WHILE (any(hmask .and. (hunit == -1)))
 
             nunit = nunit + 1
 
-            do ipxl = 1, npxl
+            DO ipxl = fstloc, npxl
                i = ij_sorted(1,ipxl)
                j = ij_sorted(2,ipxl)
-               if (hunit(i,j) == -1) exit
+               IF (hunit(i,j) == -1) THEN
+                  CALL nextij (i,j, dir(i,j),inext,jnext, is_local = .true.)
+                  IF (hunit(inext,jnext) /= -1) THEN
+                     EXIT
+                  ENDIF
+               ENDIF
             ENDDO
 
             hunit(i,j) = nunit
 
             IF (.not. ((lakeid < 0) .and. (nunit == 1))) THEN
                area_this = area(i,j)
+               unit_next = hunit(inext,jnext)
             ELSE
                area_this = area_this + area(i,j)
+               unit_next = -2
             ENDIF
-
-            CALL find_drainage_neighbour (np, mp, dir, hunit, hmask, i, j, route, nnode, unit_next)
-
-            nborder = 0
-            CALL find_nearest_pixels (np, mp, i, j, hmask, hunit, order2d, order1d, nborder, blist)
 
             DO WHILE (area_this < levsize)
 
-               ipxl = 1
-               DO WHILE (ipxl <= nborder)
-                  IF (hunit(blist(1,ipxl),blist(2,ipxl)) == -1) THEN
-                     CALL find_drainage_neighbour (np, mp, dir, hunit, hmask, &
-                        blist(1,ipxl), blist(2,ipxl), route, nnode, unext)
-                     IF ((unext == unit_next) .or. (unext == nunit)) THEN
-                        DO inode = 1, nnode
-                           i = route(1,inode)
-                           j = route(2,inode)
-                           IF (hunit(i,j) == -1) THEN
-                              hunit(i,j) = nunit
-                              area_this = area_this + area(i,j)
-                              CALL find_nearest_pixels (np, mp, i, j, &
-                                 hmask, hunit, order2d, order1d, nborder, blist)
-                           ENDIF
+               ipxl = fstloc
+               found = .false.
+               DO WHILE (ipxl <= npxl)
+
+                  i = ij_sorted(1,ipxl)
+                  j = ij_sorted(2,ipxl)
+
+                  IF (hunit(i,j) == -1) THEN
+
+                     CALL nextij (i,j, dir(i,j),inext,jnext, is_local = .true.)
+
+                     IF (hunit(inext,jnext) == nunit) THEN
+                        found = .true.
+                     ELSEIF (hunit(inext,jnext) == unit_next) THEN
+                        DO jnb = max(j-1,1), min(j+1,mp)
+                           DO inb = max(i-1,1), min(i+1,np)
+                              IF ((inb /= i) .or. (jnb /= j)) THEN
+                                 IF (hunit(inb,jnb) == nunit) THEN
+                                    found = .true.
+                                    EXIT
+                                 ENDIF
+                              ENDIF
+                           ENDDO
+                           IF (found) EXIT
                         ENDDO
-                        exit
-                     ELSE
-                        ipxl = ipxl + 1
                      ENDIF
+
+                  ENDIF
+
+                  IF (found) THEN
+                     EXIT
                   ELSE
                      ipxl = ipxl + 1
-                  ENDIF
+                  ENDIF 
                ENDDO
 
-               IF (ipxl > nborder) THEN
-                  exit
+               IF (found) THEN
+
+                  hunit(i,j) = nunit
+                  area_this = area_this + area(i,j)
+
+                  DO WHILE ((fstloc < npxl) .and. (hunit(ij_sorted(1,fstloc),ij_sorted(2,fstloc)) /= -1))
+                     fstloc = fstloc + 1
+                  ENDDO
+               ELSE
+                  EXIT
                ENDIF
+
             ENDDO
 
          ENDDO
 
          allocate (area_unit(1:nunit))
          area_unit(:) = 0
-         do j = 1, mp
-            do i = 1, np
+         DO j = 1, mp
+            DO i = 1, np
                IF (hmask(i,j) .and. (hunit(i,j) > 0)) THEN
                   area_unit(hunit(i,j)) = area_unit(hunit(i,j)) + area(i,j)
                ENDIF
@@ -423,60 +433,60 @@ CONTAINS
          allocate (iunit_next (nunit))
          iunit_next = -1
          hdown = -9
-         do j = 1, mp
-            do i = 1, np
-               if (hmask(i,j) .and. (hunit(i,j) > 0) .and. (hdown(i,j) == -9)) then
+         DO j = 1, mp
+            DO i = 1, np
+               IF (hmask(i,j) .and. (hunit(i,j) > 0) .and. (hdown(i,j) == -9)) THEN
 
                   nnode = 1
                   route(:,nnode) = (/i,j/)
 
-                  do while (.true.)
-                     call nextij (route(1,nnode),route(2,nnode),&
+                  DO WHILE (.true.)
+                     CALL nextij (route(1,nnode),route(2,nnode),&
                         dir(route(1,nnode),route(2,nnode)),inext,jnext, is_local = .true.)
 
                      IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN
-                        if (hmask(inext,jnext) .and. (hunit(inext,jnext) == hunit(i,j)) &
-                           .and. (hdown(inext,jnext) == -9)) then
+                        IF (hmask(inext,jnext) .and. (hunit(inext,jnext) == hunit(i,j)) &
+                           .and. (hdown(inext,jnext) == -9)) THEN
                            nnode = nnode + 1
                            route(:,nnode) = (/inext,jnext/)
-                        else
-                           if (.not. hmask(inext,jnext)) then
+                        ELSE
+                           IF (.not. hmask(inext,jnext)) THEN
                               hdown(route(1,nnode),route(2,nnode)) = 0
-                           elseif (hunit(inext,jnext) /= hunit(i,j)) then
+                           ELSEIF (hunit(inext,jnext) /= hunit(i,j)) THEN
                               hdown(route(1,nnode),route(2,nnode)) = hunit(inext,jnext)
-                           else
+                           ELSE
                               hdown(route(1,nnode),route(2,nnode)) = hdown(inext,jnext)
-                              if (iunit_next(hunit(i,j)) /= hdown(inext,jnext)) then
+                              IF (iunit_next(hunit(i,j)) /= hdown(inext,jnext)) THEN
                                  write(*,*) 'Warning: more than one downstreams!'
-                              end if
-                           end if
+                              ENDIF
+                           ENDIF
 
-                           exit
-                        end if
+                           EXIT
+                        ENDIF
                      ELSE
                         hdown(route(1,nnode),route(2,nnode)) = 0
                         EXIT
                      ENDIF
-                  end do
+                  ENDDO
 
                   iunit_next(hunit(i,j)) = hdown(route(1,nnode),route(2,nnode))
-                  do inode = nnode-1, 1, -1
+                  DO inode = nnode-1, 1, -1
                      hdown(route(1,inode),route(2,inode)) = hdown(route(1,inode+1), route(2,inode+1))
-                  end do
+                  ENDDO
 
-               end if
-            end do
-         end do
+               ENDIF
+            ENDDO
+         ENDDO
 
          allocate (is_neighbour (nunit,nunit))
          is_neighbour(:,:) = .false.
-         do j = 1, mp
-            do i = 1, np
-               if (hmask(i,j) .and. (hunit(i,j) > 0)) then
-                  do jnext = max(1,j-1), min(mp,j+1)
-                     do inext = max(1,i-1), min(np,i+1)
-                        if (hmask(inext,jnext) .and. (hunit(inext,jnext) > 0) &
-                           .and. (hunit(inext,jnext) /= hunit(i,j))) then
+         DO j = 1, mp
+            DO i = 1, np
+               IF (hmask(i,j) .and. (hunit(i,j) > 0)) THEN
+                  DO jnext = max(1,j-1), min(mp,j+1)
+                     DO inext = max(1,i-1), min(np,i+1)
+                        IF (hmask(inext,jnext) .and. (hunit(inext,jnext) > 0) &
+                           .and. (hunit(inext,jnext) /= hunit(i,j))) THEN
                            is_neighbour(hunit(i,j),hunit(inext,jnext)) = .true.
                            is_neighbour(hunit(inext,jnext),hunit(i,j)) = .true.
                         ENDIF
@@ -498,7 +508,7 @@ CONTAINS
                   .and. (iunit_next(iunit) == iunit_next(junit)) &
                   .and. (is_neighbour(iunit,junit)) &
                   .and. (area_unit(junit) + area_unit(iunit) < levsize * 1.2) &
-                  .and. (area_unit(junit) < areaneighbour)) then
+                  .and. (area_unit(junit) < areaneighbour)) THEN
                   unitneighbour = junit
                   areaneighbour = area_unit(junit)
                ENDIF
@@ -509,32 +519,32 @@ CONTAINS
                   area_unit(unitneighbour) = area_unit(unitneighbour) + area_unit(iunit)
                   area_unit(iunit) = 0.
 
-                  where (iunit_next == iunit)
+                  WHERE (iunit_next == iunit)
                      iunit_next = unitneighbour
-                  END where
+                  END WHERE
                   iunit_next(iunit) = -1
 
                   is_neighbour(unitneighbour,:) = is_neighbour(unitneighbour,:) .or. is_neighbour(iunit,:)
                   is_neighbour(:,unitneighbour) = is_neighbour(:,unitneighbour) .or. is_neighbour(:,iunit)
 
-                  where (hmask .and. (hunit == iunit))
+                  WHERE (hmask .and. (hunit == iunit))
                      hunit = unitneighbour
-                  END where
+                  END WHERE
                ELSE
                   area_unit(iunit) = area_unit(iunit) + area_unit(unitneighbour)
                   area_unit(unitneighbour) = 0.
 
-                  where (iunit_next == unitneighbour)
+                  WHERE (iunit_next == unitneighbour)
                      iunit_next = iunit
-                  END where
+                  END WHERE
                   iunit_next(unitneighbour) = -1
 
                   is_neighbour(iunit,:) = is_neighbour(iunit,:) .or. is_neighbour(unitneighbour,:)
                   is_neighbour(:,iunit) = is_neighbour(:,iunit) .or. is_neighbour(:,unitneighbour)
 
-                  where (hmask .and. (hunit == unitneighbour))
+                  WHERE (hmask .and. (hunit == unitneighbour))
                      hunit = iunit
-                  END where
+                  END WHERE
                ENDIF
 
                small_units = ((area_unit < levsize/2.0) .and. (area_unit > 0))
@@ -543,18 +553,18 @@ CONTAINS
             ENDIF
          ENDDO
 
-         do iunit = nunit, 1, -1
-            if ((iunit_next(iunit) > 0) .and. all(iunit_next /= iunit) &
+         DO iunit = nunit, 1, -1
+            IF ((iunit_next(iunit) > 0) .and. all(iunit_next /= iunit) &
                .and. (area_unit(iunit) < levsize * 0.1)) THEN
                junit = iunit_next(iunit)
                area_unit(junit) = area_unit(junit) + area_unit(iunit)
                area_unit(iunit) = 0.
                iunit_next(iunit) = -1
-               where (hmask .and. (hunit == iunit))
+               WHERE (hmask .and. (hunit == iunit))
                   hunit = junit
-               END where
-            end if
-         end do
+               END WHERE
+            ENDIF
+         ENDDO
 
          iunit = 1
          DO WHILE (iunit <= nunit)
@@ -564,12 +574,12 @@ CONTAINS
                   area_unit(iunit) = area_unit(iunit) + area_unit(junit)
                   area_unit(junit) = 0.
                   iunit_next(junit) = -1
-                  where (iunit_next == junit)
+                  WHERE (iunit_next == junit)
                      iunit_next = iunit
-                  END where
-                  where (hmask .and. (hunit == junit))
+                  END WHERE
+                  WHERE (hmask .and. (hunit == junit))
                      hunit = iunit
-                  END where
+                  END WHERE
                ELSE
                   iunit = iunit + 1
                ENDIF
@@ -579,54 +589,54 @@ CONTAINS
          ENDDO
 
          junit = 0
-         do iunit = 1, nunit
-            if (area_unit(iunit) > 0) then
+         DO iunit = 1, nunit
+            IF (area_unit(iunit) > 0) THEN
                junit = junit + 1
-               where (hmask .and. (hunit == iunit)) 
+               WHERE (hmask .and. (hunit == iunit)) 
                   hunit = junit
-               END where
-               where (iunit_next == iunit)
+               END WHERE
+               WHERE (iunit_next == iunit)
                   iunit_next = junit
-               END where
+               END WHERE
                iunit_next(junit) = iunit_next(iunit)
                area_unit (junit) = area_unit (iunit)
-            end if
-         end do
+            ENDIF
+         ENDDO
 
          nunit = junit
 
          nisland = 0
-         do iunit = 1, nunit
-            if ((iunit_next(iunit) == 0) &
+         DO iunit = 1, nunit
+            IF ((iunit_next(iunit) == 0) &
                .and. all(iunit_next(1:nunit) /= iunit) &
-               .and. (area_unit(iunit) < levsize * 0.1)) then
+               .and. (area_unit(iunit) < levsize * 0.1)) THEN
                nisland = nisland + 1
-               where (hmask .and. (hunit == iunit)) 
+               WHERE (hmask .and. (hunit == iunit)) 
                   hunit = -1
-               END where
-            end if
-         end do
+               END WHERE
+            ENDIF
+         ENDDO
 
-         if (nisland > 0) then
+         IF (nisland > 0) THEN
             junit = 0
-            do iunit = 1, nunit
-               if (.not. ((iunit_next(iunit) == 0) &
+            DO iunit = 1, nunit
+               IF (.not. ((iunit_next(iunit) == 0) &
                   .and. all(iunit_next(1:nunit) /= iunit) &
-                  .and. (area_unit(iunit) < levsize * 0.1))) then
+                  .and. (area_unit(iunit) < levsize * 0.1))) THEN
                   junit = junit + 1
-                  where (hmask .and. (hunit == iunit)) 
+                  WHERE (hmask .and. (hunit == iunit)) 
                      hunit = junit
-                  END where
-               end if
+                  END WHERE
+               ENDIF
             ENDDO
 
-            where (hmask .and. (hunit > 0  )) 
+            WHERE (hmask .and. (hunit > 0  )) 
                hunit = hunit + 1
-            END where
-            where (hmask .and. (hunit == -1)) 
+            END WHERE
+            WHERE (hmask .and. (hunit == -1)) 
                hunit = 1
-            END where
-         end if
+            END WHERE
+         ENDIF
 
          deallocate (iunit_next)
          deallocate (area_unit )
@@ -637,14 +647,13 @@ CONTAINS
          deallocate (order1d)
 
          deallocate (ij_sorted)
-         deallocate (blist)
 
          deallocate (is_neighbour)
          deallocate (small_units )
 
-      end if 
+      ENDIF 
 
-   end subroutine divide_hillslope_into_hydrounits
+   END SUBROUTINE divide_hillslope_into_hydrounits
 
    SUBROUTINE divide_lake (lakeid, np, mp, area, hmask, lakecellsize, hunit)
 
@@ -693,88 +702,5 @@ CONTAINS
       deallocate (lakeindex)
 
    END SUBROUTINE divide_lake
-
-   SUBROUTINE find_nearest_pixels (np, mp, i, j, hm, hu, o2d, o1d, nb, blist)
-
-      USE utils_mod
-      IMPLICIT NONE
-
-      integer (kind = 4), intent(in) :: np, mp
-      integer (kind = 4), intent(in) :: i, j
-      logical, intent(in) :: hm (:,:)
-      integer (kind = 4), intent(in) :: hu (:,:)
-      integer (kind = 4), intent(in) :: o2d(:,:)
-
-      integer (kind = 4), intent(inout) :: o1d(:)
-      integer (kind = 4), intent(inout) :: nb
-      integer (kind = 4), intent(inout) :: blist(:,:)
-
-      ! Local Variables
-      integer (kind = 4) :: inext, jnext, iloc
-      LOGICAL :: is_new
-
-      do jnext = max(j-1,1), min(j+1,mp)
-         do inext = max(i-1,1), min(i+1,np)
-            if (hm(inext,jnext) .and. (hu(inext,jnext) == -1)) then
-               call insert_into_sorted_list1 (o2d(inext,jnext), nb, o1d, iloc, is_new)
-
-               if (is_new) then
-                  if (iloc < nb) then
-                     blist(:,iloc+1:nb) = blist(:,iloc:nb-1)
-                  end if
-
-                  blist(:,iloc) = (/inext,jnext/)
-               end if
-            end if
-
-         end do
-      end do
-
-   END SUBROUTINE find_nearest_pixels
-
-   SUBROUTINE find_drainage_neighbour (np, mp, dir, hu, hmsk, i, j, route, nnode, unext)
-
-      use utils_mod
-      use hydro_data_mod
-      IMPLICIT NONE
-
-      integer :: np, mp
-      integer (kind = 1), intent(in) :: dir (:,:)  ! flow direction
-      integer (kind = 4), intent(in) :: hu  (:,:)    
-      logical,            intent(in) :: hmsk(:,:)    
-      integer (kind = 4), intent(in) :: i, j
-
-      integer (kind = 4), intent(inout) :: route(:,:)
-      integer (kind = 4), intent(out)   :: nnode
-      integer (kind = 4), intent(out)   :: unext
-
-      ! Local Variables
-      integer (kind = 4) :: inext, jnext
-
-      nnode = 1
-      route(:,nnode) = (/i,j/)
-      do while (.true.)
-         call nextij (route(1,nnode),route(2,nnode),&
-            dir(route(1,nnode),route(2,nnode)),inext,jnext, is_local = .true.)
-
-         IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN 
-            if ((hu(inext,jnext) == -1) .and. hmsk(inext,jnext)) THEN
-               nnode = nnode + 1
-               route(:,nnode) = (/inext,jnext/)
-            else
-               IF (.not. hmsk(inext,jnext)) THEN
-                  unext = -1
-               ELSE
-                  unext = hu(inext,jnext)
-               ENDIF
-               exit
-            end if
-         ELSE
-            unext = -1
-            EXIT
-         ENDIF
-      end do
-
-   END SUBROUTINE find_drainage_neighbour 
 
 END MODULE hillslope_mod

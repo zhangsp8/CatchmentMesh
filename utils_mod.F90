@@ -1,18 +1,18 @@
-module utils_mod
+MODULE utils_mod
 
    interface quicksort
-      module procedure quicksort_single
-      module procedure quicksort_double
-      module procedure quicksort_int32
-   end interface quicksort
+      MODULE procedure quicksort_single
+      MODULE procedure quicksort_double
+      MODULE procedure quicksort_int32
+   END interface quicksort
 
 
-contains
+CONTAINS
 
    !--------------------------------------------------
-   subroutine insert_into_sorted_list1 (x, n, list, iloc, is_new_out)
+   SUBROUTINE insert_into_sorted_list1 (x, n, list, iloc, is_new_out)
 
-      implicit none
+      IMPLICIT NONE
 
       integer, intent(in) :: x
       integer, intent(inout) :: n
@@ -25,70 +25,70 @@ contains
       ! Local variables
       integer :: iright, ileft
 
-      if (n == 0) then
+      IF (n == 0) THEN
          iloc = 1
          is_new = .true.
-      elseif (x <= list(1)) then
+      ELSEIF (x <= list(1)) THEN
          iloc = 1
          is_new = (x /= list(1))
-      elseif (x > list(n)) then
+      ELSEIF (x > list(n)) THEN
          iloc = n + 1
          is_new = .true. 
-      elseif (x == list(n)) then
+      ELSEIF (x == list(n)) THEN
          iloc = n
          is_new = .false. 
-      else
+      ELSE
          iright = 1
          ileft  = n
 
-         do while (.true.)
-            if (ileft - iright > 1) then
+         DO WHILE (.true.)
+            IF (ileft - iright > 1) THEN
                iloc = (iright + ileft) / 2
-               if (x > list(iloc)) then
+               IF (x > list(iloc)) THEN
                   iright = iloc
-               elseif (x < list(iloc)) then
+               ELSEIF (x < list(iloc)) THEN
                   ileft = iloc
-               else
+               ELSE
                   is_new = .false.
-                  exit 
-               end if
-            else
+                  EXIT 
+               ENDIF
+            ELSE
                iloc = ileft
                is_new = .true.
-               exit
-            end if
-         end do
-      end if
+               EXIT
+            ENDIF
+         ENDDO
+      ENDIF
 
-      if (is_new) then
-         if (iloc <= n) then
+      IF (is_new) THEN
+         IF (iloc <= n) THEN
             list(iloc+1:n+1) = list(iloc:n)
-         end if
+         ENDIF
 
          list(iloc) = x
          n = n + 1
-      end if
+      ENDIF
 
-      if (present(is_new_out)) then
+      IF (present(is_new_out)) THEN
          is_new_out = is_new
-      end if
+      ENDIF
 
-   end subroutine insert_into_sorted_list1
+   END SUBROUTINE insert_into_sorted_list1
 
    !--------------------------------------------------
    SUBROUTINE insert_into_sorted_list2 (x, y, n, xlist, ylist, iloc, is_new_out)
 
       IMPLICIT NONE
 
-      INTEGER, intent(in) :: x, y
-      INTEGER, intent(inout) :: n
-      INTEGER, intent(inout) :: xlist(:), ylist(:)
-      INTEGER, intent(out)   :: iloc
-      LOGICAL, intent(out), optional :: is_new_out
+      integer, intent(in) :: x, y
+      integer, intent(inout) :: n
+      integer, intent(inout) :: xlist(:), ylist(:)
+      integer, intent(out)   :: iloc
+      logical, intent(out), optional :: is_new_out
 
       ! Local variables
-      LOGICAL :: is_new
-      INTEGER :: ileft, iright
+      logical :: is_new
+      integer :: ileft, iright
 
       IF (n == 0) THEN
          iloc = 1
@@ -115,12 +115,12 @@ contains
                   iright = iloc
                ELSE
                   is_new = .false.
-                  exit
+                  EXIT
                ENDIF
             ELSE
                iloc = iright
                is_new = .true.
-               exit
+               EXIT
             ENDIF
          ENDDO
       ENDIF
@@ -147,14 +147,14 @@ contains
 
       IMPLICIT NONE
 
-      INTEGER :: iloc
+      integer :: iloc
 
-      INTEGER, intent(in) :: x
-      INTEGER, intent(in) :: n
-      INTEGER, intent(in) :: list (n)
+      integer, intent(in) :: x
+      integer, intent(in) :: n
+      integer, intent(in) :: list (n)
 
       ! Local variables
-      INTEGER :: i, ileft, iright
+      integer :: i, ileft, iright
 
       iloc = 0
       IF (n > 0) THEN
@@ -171,7 +171,7 @@ contains
                   i = (ileft + iright) / 2
                   IF (x == list(i)) THEN
                      iloc = i
-                     exit
+                     EXIT
                   ELSEIF (x > list(i)) THEN
                      ileft = i
                   ELSEIF (x < list(i)) THEN
@@ -189,14 +189,14 @@ contains
 
       IMPLICIT NONE
 
-      INTEGER :: iloc
+      integer :: iloc
 
-      INTEGER, intent(in) :: x, y
-      INTEGER, intent(in) :: n
-      INTEGER, intent(in) :: xlist(:), ylist(:)
+      integer, intent(in) :: x, y
+      integer, intent(in) :: n
+      integer, intent(in) :: xlist(:), ylist(:)
 
       ! Local variables
-      INTEGER :: i, ileft, iright
+      integer :: i, ileft, iright
 
       iloc = 0
       IF (n < 1) RETURN
@@ -213,12 +213,12 @@ contains
          ileft  = 1
          iright = n
 
-         DO while (.true.)
+         DO WHILE (.true.)
             IF (iright - ileft > 1) THEN
                i = (ileft + iright) / 2
                IF ((y == ylist(i)) .and. (x == xlist(i))) THEN
                   iloc = i
-                  exit
+                  EXIT
                ELSEIF ((y > ylist(i)) .or. ((y == ylist(i)) .and. (x > xlist(i)))) THEN
                   ileft = i
                ELSEIF ((y < ylist(i)) .or. ((y == ylist(i)) .and. (x < xlist(i)))) THEN
@@ -226,7 +226,7 @@ contains
                ENDIF
             ELSE
                iloc = 0
-               exit
+               EXIT
             ENDIF
          ENDDO
       ENDIF
@@ -234,70 +234,10 @@ contains
    END FUNCTION find_in_sorted_list2
    
    !-----------------------------------------------------
-   subroutine find_floor_lat (y, n, lat, iloc, yinc)
+   SUBROUTINE find_floor_lat (y, n, lat, iloc, yinc)
 
-      use precision
-      implicit none
-
-      real(r8), intent(in) :: y
-      integer,  intent(in) :: n
-      real(r8), intent(in) :: lat (n)
-      
-      integer, intent(out) :: iloc
-      integer, intent(out), optional :: yinc 
-
-      ! Local variables
-      integer :: i, iright, ileft
-
-      if (lat(1) < lat(n))  then
-         if (present(yinc))  yinc =  1
-         if (y <= lat(1)) then
-            iloc = 1
-         elseif (y >= lat(n)) then
-            iloc = n
-         else
-            ileft = 1;  iright = n
-
-            do while (iright - ileft > 1)
-               i = (iright + ileft) / 2
-               if (y >= lat(i)) then
-                  ileft = i
-               else
-                  iright = i
-               end if
-            end do
-
-            iloc = ileft
-         end if
-      else
-         if (present(yinc))  yinc = -1
-         if (y >= lat(1)) then
-            iloc = 1
-         elseif (y <= lat(n)) then
-            iloc = n
-         else
-            ileft = 1;  iright = n
-
-            do while (iright - ileft > 1)
-               i = (iright + ileft) / 2
-               if (y >= lat(i)) then
-                  iright = i
-               else
-                  ileft = i
-               end if
-            end do
-
-            iloc = iright
-         end if
-      end if
-
-   end subroutine find_floor_lat
-
-   !-----------------------------------------------------
-   subroutine find_ceiling_lat (y, n, lat, iloc, yinc)
-
-      use precision
-      implicit none
+      USE precision
+      IMPLICIT NONE
 
       real(r8), intent(in) :: y
       integer,  intent(in) :: n
@@ -309,55 +249,115 @@ contains
       ! Local variables
       integer :: i, iright, ileft
 
-      if (lat(1) < lat(n))  then
-         if (present(yinc))  yinc = 1
-         if (y <= lat(1)) then
+      IF (lat(1) < lat(n))  THEN
+         IF (present(yinc))  yinc =  1
+         IF (y <= lat(1)) THEN
             iloc = 1
-         elseif (y >= lat(n)) then
+         ELSEIF (y >= lat(n)) THEN
             iloc = n
-         else
+         ELSE
             ileft = 1;  iright = n
 
-            do while (iright - ileft > 1)
+            DO WHILE (iright - ileft > 1)
                i = (iright + ileft) / 2
-               if (y > lat(i)) then
+               IF (y >= lat(i)) THEN
                   ileft = i
-               else
+               ELSE
                   iright = i
-               end if
-            end do
+               ENDIF
+            ENDDO
 
             iloc = ileft
-         end if
-      else
-         if (present(yinc))  yinc = -1
-         if (y >= lat(1)) then
+         ENDIF
+      ELSE
+         IF (present(yinc))  yinc = -1
+         IF (y >= lat(1)) THEN
             iloc = 1
-         elseif (y <= lat(n)) then
+         ELSEIF (y <= lat(n)) THEN
             iloc = n
-         else
+         ELSE
             ileft = 1;  iright = n
 
-            do while (iright - ileft > 1)
+            DO WHILE (iright - ileft > 1)
                i = (iright + ileft) / 2
-               if (y > lat(i)) then
+               IF (y >= lat(i)) THEN
                   iright = i
-               else
+               ELSE
                   ileft = i
-               end if
-            end do
+               ENDIF
+            ENDDO
 
             iloc = iright
-         end if
-      end if
+         ENDIF
+      ENDIF
 
-   end subroutine find_ceiling_lat
+   END SUBROUTINE find_floor_lat
 
    !-----------------------------------------------------
-   subroutine find_floor_lon (x, n, lon, iloc)
+   SUBROUTINE find_ceiling_lat (y, n, lat, iloc, yinc)
 
-      use precision
-      implicit none
+      USE precision
+      IMPLICIT NONE
+
+      real(r8), intent(in) :: y
+      integer,  intent(in) :: n
+      real(r8), intent(in) :: lat (n)
+      
+      integer, intent(out) :: iloc
+      integer, intent(out), optional :: yinc 
+
+      ! Local variables
+      integer :: i, iright, ileft
+
+      IF (lat(1) < lat(n))  THEN
+         IF (present(yinc))  yinc = 1
+         IF (y <= lat(1)) THEN
+            iloc = 1
+         ELSEIF (y >= lat(n)) THEN
+            iloc = n
+         ELSE
+            ileft = 1;  iright = n
+
+            DO WHILE (iright - ileft > 1)
+               i = (iright + ileft) / 2
+               IF (y > lat(i)) THEN
+                  ileft = i
+               ELSE
+                  iright = i
+               ENDIF
+            ENDDO
+
+            iloc = ileft
+         ENDIF
+      ELSE
+         IF (present(yinc))  yinc = -1
+         IF (y >= lat(1)) THEN
+            iloc = 1
+         ELSEIF (y <= lat(n)) THEN
+            iloc = n
+         ELSE
+            ileft = 1;  iright = n
+
+            DO WHILE (iright - ileft > 1)
+               i = (iright + ileft) / 2
+               IF (y > lat(i)) THEN
+                  iright = i
+               ELSE
+                  ileft = i
+               ENDIF
+            ENDDO
+
+            iloc = iright
+         ENDIF
+      ENDIF
+
+   END SUBROUTINE find_ceiling_lat
+
+   !-----------------------------------------------------
+   SUBROUTINE find_floor_lon (x, n, lon, iloc)
+
+      USE precision
+      IMPLICIT NONE
 
       real(r8), intent(in) :: x
       integer,  intent(in) :: n
@@ -368,44 +368,44 @@ contains
       ! Local variables
       integer :: i, iright, ileft
 
-      if (lon(1) >= lon(n)) then  
+      IF (lon(1) >= lon(n)) THEN  
          ! for the cast 0~180 -> -180~0
-         if ((x >= lon(n)) .and. (x < lon(1))) then
-            iloc = n; return
-         end if
-      else   
-         ! for the case -180~180
-         if ((x < lon(1)) .or. (x >= lon(n))) then
-            iloc = n; return
-         end if 
-      end if
+         IF ((x >= lon(n)) .and. (x < lon(1))) THEN
+            iloc = n; RETURN
+         ENDIF
+      ELSE   
+         ! for the CASE -180~180
+         IF ((x < lon(1)) .or. (x >= lon(n))) THEN
+            iloc = n; RETURN
+         ENDIF 
+      ENDIF
 
       ileft = 1; iright = n
-      do while (iright - ileft > 1)
+      DO WHILE (iright - ileft > 1)
          i = (iright + ileft)/2
-         if (lon(iright) > lon(i)) then
-            if (x >= lon(i)) then
+         IF (lon(iright) > lon(i)) THEN
+            IF (x >= lon(i)) THEN
                ileft = i
-            else
+            ELSE
                iright = i
-            end if
-         else
-            if ((x < lon(iright)) .or. (x >= lon(i))) then
+            ENDIF
+         ELSE
+            IF ((x < lon(iright)) .or. (x >= lon(i))) THEN
                ileft = i
-            else
+            ELSE
                iright = i
-            end if 
-         end if
-      end do
+            ENDIF 
+         ENDIF
+      ENDDO
       
       iloc = ileft
 
-   end subroutine find_floor_lon
+   END SUBROUTINE find_floor_lon
 
    !-----------------------------------------
-   function max_lon (lon1, lon2) result (lon)
-      use precision
-      implicit none
+   FUNCTION max_lon (lon1, lon2) result (lon)
+      USE precision
+      IMPLICIT NONE
 
       real(r8) :: lon
       real(r8), intent(in) :: lon1, lon2
@@ -413,18 +413,18 @@ contains
       real(r8) :: lonr, lonl
 
       lonr = max(lon1,lon2);   lonl = min(lon1,lon2)
-      if (lonr - lonl > 180.0) then
+      IF (lonr - lonl > 180.0) THEN
          lon = lonl
-      else
+      ELSE
          lon = lonr
-      end if
+      ENDIF
 
-   end function max_lon
+   END FUNCTION max_lon
 
    !-----------------------------------------
-   function min_lon (lon1, lon2) result (lon)
-      use precision
-      implicit none
+   FUNCTION min_lon (lon1, lon2) result (lon)
+      USE precision
+      IMPLICIT NONE
 
       real(r8) :: lon
       real(r8), intent(in) :: lon1, lon2
@@ -432,19 +432,19 @@ contains
       real(r8) :: lonr, lonl
 
       lonr = max(lon1,lon2);   lonl = min(lon1,lon2)
-      if (lonr - lonl > 180.0) then
+      IF (lonr - lonl > 180.0) THEN
          lon = lonr
-      else
+      ELSE
          lon = lonl
-      end if
+      ENDIF
 
-   end function min_lon
+   END FUNCTION min_lon
 
    !-----------------------------------------------------
-   subroutine find_ceiling_lon (x, n, lon, iloc)
+   SUBROUTINE find_ceiling_lon (x, n, lon, iloc)
 
-      use precision
-      implicit none
+      USE precision
+      IMPLICIT NONE
 
       real(r8), intent(in) :: x
       integer,  intent(in) :: n
@@ -455,46 +455,46 @@ contains
       ! Local variables
       integer :: i, iright, ileft
 
-      if (lon(1) >= lon(n)) then  
+      IF (lon(1) >= lon(n)) THEN  
          ! for the cast 0~180 -> -180~0
-         if ((x > lon(n)) .and. (x <= lon(1))) then
-            iloc = 1; return
-         end if
-      else   
-         ! for the case -180~180
-         if ((x <= lon(1)) .or. (x > lon(n))) then
-            iloc = 1; return
-         end if 
-      end if
+         IF ((x > lon(n)) .and. (x <= lon(1))) THEN
+            iloc = 1; RETURN
+         ENDIF
+      ELSE   
+         ! for the CASE -180~180
+         IF ((x <= lon(1)) .or. (x > lon(n))) THEN
+            iloc = 1; RETURN
+         ENDIF 
+      ENDIF
 
       ileft = 1; iright = n
-      do while (iright - ileft > 1)
+      DO WHILE (iright - ileft > 1)
          i = (iright + ileft)/2
-         if (lon(iright) > lon(i)) then
-            if (x > lon(i)) then
+         IF (lon(iright) > lon(i)) THEN
+            IF (x > lon(i)) THEN
                ileft = i
-            else
+            ELSE
                iright = i
-            end if
-         else
-            if ((x <= lon(iright)) .or. (x > lon(i))) then
+            ENDIF
+         ELSE
+            IF ((x <= lon(iright)) .or. (x > lon(i))) THEN
                ileft = i
-            else
+            ELSE
                iright = i
-            end if 
-         end if
-      end do
+            ENDIF 
+         ENDIF
+      ENDDO
       
       iloc = iright
 
-   end subroutine find_ceiling_lon
+   END SUBROUTINE find_ceiling_lon
 
 
    !-----------------------------------------------------
-   recursive subroutine quicksort_single (nA, A, order)
+   recursive SUBROUTINE quicksort_single (nA, A, order)
 
-      use precision
-      implicit none
+      USE precision
+      IMPLICIT NONE
 
       integer, intent(in) :: nA
       real(4), intent(inout) :: A     (nA)
@@ -507,24 +507,24 @@ contains
       real(4) :: rtemp 
       integer :: itemp
 
-      if (nA > 1) then
+      IF (nA > 1) THEN
 
          pivot = A (nA/2)
          left  = 0
          right = nA + 1
 
-         do while (left < right)
+         DO WHILE (left < right)
             right = right - 1
-            do while (A(right) > pivot)
+            DO WHILE (A(right) > pivot)
                right = right - 1
-            end do
+            ENDDO
 
             left = left + 1
-            do while (A(left) < pivot)
+            DO WHILE (A(left) < pivot)
                left = left + 1
-            end do
+            ENDDO
 
-            if (left < right) then
+            IF (left < right) THEN
                rtemp    = A(left)
                A(left)  = A(right)
                A(right) = rtemp
@@ -533,27 +533,27 @@ contains
                order(left)  = order(right)
                order(right) = itemp
 
-            end if
-         end do
+            ENDIF
+         ENDDO
 
-         if (left == right) then
+         IF (left == right) THEN
             marker = left + 1
-         else
+         ELSE
             marker = left
-         end if
+         ENDIF
 
-         call quicksort_single (marker-1,    A(:marker-1), order(:marker-1))
-         call quicksort_single (nA-marker+1, A(marker:),   order(marker:)  )
+         CALL quicksort_single (marker-1,    A(:marker-1), order(:marker-1))
+         CALL quicksort_single (nA-marker+1, A(marker:),   order(marker:)  )
 
-      end if
+      ENDIF
 
-   end subroutine quicksort_single
+   END SUBROUTINE quicksort_single
 
    !-----------------------------------------------------
-   recursive subroutine quicksort_double (nA, A, order)
+   recursive SUBROUTINE quicksort_double (nA, A, order)
 
-      use precision
-      implicit none
+      USE precision
+      IMPLICIT NONE
 
       integer , intent(in) :: nA
       real(r8), intent(inout) :: A     (nA)
@@ -566,24 +566,24 @@ contains
       real(r8) :: rtemp 
       integer  :: itemp
 
-      if (nA > 1) then
+      IF (nA > 1) THEN
 
          pivot = A (nA/2)
          left  = 0
          right = nA + 1
 
-         do while (left < right)
+         DO WHILE (left < right)
             right = right - 1
-            do while (A(right) > pivot)
+            DO WHILE (A(right) > pivot)
                right = right - 1
-            end do
+            ENDDO
 
             left = left + 1
-            do while (A(left) < pivot)
+            DO WHILE (A(left) < pivot)
                left = left + 1
-            end do
+            ENDDO
 
-            if (left < right) then
+            IF (left < right) THEN
                rtemp    = A(left)
                A(left)  = A(right)
                A(right) = rtemp
@@ -592,27 +592,27 @@ contains
                order(left)  = order(right)
                order(right) = itemp
 
-            end if
-         end do
+            ENDIF
+         ENDDO
 
-         if (left == right) then
+         IF (left == right) THEN
             marker = left + 1
-         else
+         ELSE
             marker = left
-         end if
+         ENDIF
 
-         call quicksort_double (marker-1,    A(:marker-1), order(:marker-1))
-         call quicksort_double (nA-marker+1, A(marker:),   order(marker:)  )
+         CALL quicksort_double (marker-1,    A(:marker-1), order(:marker-1))
+         CALL quicksort_double (nA-marker+1, A(marker:),   order(marker:)  )
 
-      end if
+      ENDIF
 
-   end subroutine quicksort_double
+   END SUBROUTINE quicksort_double
 
    !-----------------------------------------------------
-   recursive subroutine quicksort_int32 (nA, A, order)
+   recursive SUBROUTINE quicksort_int32 (nA, A, order)
 
-      use precision
-      implicit none
+      USE precision
+      IMPLICIT NONE
 
       integer, intent(in) :: nA
       integer, intent(inout) :: A     (nA)
@@ -624,24 +624,24 @@ contains
       integer  :: marker
       integer  :: itemp
 
-      if (nA > 1) then
+      IF (nA > 1) THEN
 
          pivot = A (nA/2)
          left  = 0
          right = nA + 1
 
-         do while (left < right)
+         DO WHILE (left < right)
             right = right - 1
-            do while (A(right) > pivot)
+            DO WHILE (A(right) > pivot)
                right = right - 1
-            end do
+            ENDDO
 
             left = left + 1
-            do while (A(left) < pivot)
+            DO WHILE (A(left) < pivot)
                left = left + 1
-            end do
+            ENDDO
 
-            if (left < right) then
+            IF (left < right) THEN
                itemp    = A(left)
                A(left)  = A(right)
                A(right) = itemp
@@ -650,27 +650,27 @@ contains
                order(left)  = order(right)
                order(right) = itemp
 
-            end if
-         end do
+            ENDIF
+         ENDDO
 
-         if (left == right) then
+         IF (left == right) THEN
             marker = left + 1
-         else
+         ELSE
             marker = left
-         end if
+         ENDIF
 
-         call quicksort_int32 (marker-1,    A(:marker-1), order(:marker-1))
-         call quicksort_int32 (nA-marker+1, A(marker:),   order(marker:)  )
+         CALL quicksort_int32 (marker-1,    A(:marker-1), order(:marker-1))
+         CALL quicksort_int32 (nA-marker+1, A(marker:),   order(marker:)  )
 
-      end if
+      ENDIF
 
-   end subroutine quicksort_int32
+   END SUBROUTINE quicksort_int32
 
    !-----------------------------------------------------
-   recursive function quickselect (nA, A, k) result(selected)
+   recursive FUNCTION quickselect (nA, A, k) result(selected)
 
-      use precision
-      implicit none
+      USE precision
+      IMPLICIT NONE
 
       real(r8) :: selected
 
@@ -684,54 +684,54 @@ contains
       integer  :: marker
       real(r8) :: rtemp 
 
-      if (nA > 1) then
+      IF (nA > 1) THEN
 
          pivot = A (nA/2)
          left  = 0
          right = nA + 1
 
-         do while (left < right)
+         DO WHILE (left < right)
             right = right - 1
-            do while (A(right) > pivot)
+            DO WHILE (A(right) > pivot)
                right = right - 1
-            end do
+            ENDDO
 
             left = left + 1
-            do while (A(left) < pivot)
+            DO WHILE (A(left) < pivot)
                left = left + 1
-            end do
+            ENDDO
 
-            if (left < right) then
+            IF (left < right) THEN
                rtemp    = A(left)
                A(left)  = A(right)
                A(right) = rtemp
-            end if
-         end do
+            ENDIF
+         ENDDO
 
-         if (left == right) then
+         IF (left == right) THEN
             marker = left + 1
-         else
+         ELSE
             marker = left
-         end if
+         ENDIF
 
-         if (k < marker) then
+         IF (k < marker) THEN
             selected = quickselect (marker-1, A(:marker-1), k)
-         else
+         ELSE
             selected = quickselect (nA-marker+1, A(marker:), k-marker+1)
-         end if
+         ENDIF
 
-      else
+      ELSE
          selected = A(1) 
-      end if
+      ENDIF
 
-   end function quickselect
+   END FUNCTION quickselect
    
    
    ! ------------------------
-   function median(x, n) result(mval)
+   FUNCTION median(x, n) result(mval)
 
-      use precision
-      implicit none
+      USE precision
+      IMPLICIT NONE
 
       real(r8) :: mval
 
@@ -743,23 +743,23 @@ contains
       allocate (xtemp(n))
       xtemp = x
       
-      if (mod(n,2) == 0) then
+      IF (mod(n,2) == 0) THEN
          mval = (quickselect(n,xtemp,n/2) + quickselect(n,xtemp,n/2+1)) / 2.0_r8
-      else
+      ELSE
          mval = quickselect(n,xtemp,n/2+1)
-      end if
+      ENDIF
 
       deallocate (xtemp)
 
-   end function median
+   END FUNCTION median
 
    
    !-----------------------------------------------------
-   function areaquad (lat0, lat1, lon0, lon1) result(area)
+   FUNCTION areaquad (lat0, lat1, lon0, lon1) result(area)
 
-      use precision
-      use MathConstants, only : deg2rad
-      implicit none
+      USE precision
+      USE MathConstants, only : deg2rad
+      IMPLICIT NONE
 
       real(r8), parameter :: re = 6.37122e3 ! kilometer 
       real(r8) :: area
@@ -768,16 +768,16 @@ contains
 
       real(r8) :: dx, dy
 
-      if (lon1 < lon0) then
+      IF (lon1 < lon0) THEN
          dx = (lon1 + 360 -lon0) * deg2rad
-      else
+      ELSE
          dx = (lon1 - lon0) * deg2rad
-      end if
+      ENDIF
 
       dy = sin(lat1 * deg2rad) - sin(lat0 * deg2rad)
 
       area = dx * dy * re * re
 
-   end function areaquad
+   END FUNCTION areaquad
 
-end module utils_mod
+END MODULE utils_mod

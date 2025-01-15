@@ -2,145 +2,72 @@ MODULE output_mod
 
 CONTAINS
    
-   SUBROUTINE output_result (output_dir, casename, storage_type, maxhunum, maxnnb)
+   SUBROUTINE output_result (maxhunum, maxnnb)
 
-      use task_mod
-      use hydro_data_mod
+      USE task_mod
+      USE hydro_data_mod
       USE ncio_serial
 
-      implicit none
+      IMPLICIT NONE
 
-      character(len=*), intent(in) :: output_dir, casename, storage_type
       integer (kind=4), intent(in) :: maxhunum
       integer (kind=4), intent(in) :: maxnnb
 
       integer (kind=4) :: np, mp
-      REAL    (kind=8), allocatable :: longitude(:)
-      REAL    (kind=8), allocatable :: latitude (:)
+      real    (kind=8), allocatable :: longitude(:)
+      real    (kind=8), allocatable :: latitude (:)
       integer (kind=4), allocatable :: catch (:,:)    
       real    (kind=4), allocatable :: hnd   (:,:)
       real    (kind=4), allocatable :: elv   (:,:)
       integer (kind=4), allocatable :: hunit (:,:)    
 
+      type(info_typ) :: outinfo
+
       character(len=256) :: filename, mkdirname
-      integer :: iunit, iblk, jblk, iloc, nlat, nlon
-      LOGICAL :: found
+      integer :: nthis, dsp, iunit, iblk, jblk, iloc, ic, ndim1
+      logical :: found
+      real (kind = 4), parameter :: spval = -1.e36
 
-      if (p_is_master) write(*,'(/A)') 'Step 5: Output results ...'
+      CALL mpi_barrier (p_comm_glb, p_err)
 
-      ! if (p_is_master) then
-      !    filename = trim(output_dir) // '/' // trim(casename) // '_riv.bin'
-      !    iunit = 100
-      !    open  (iunit, file = trim(filename), form = 'unformatted', &
-      !       status = 'replace', access = 'stream', action = 'write')
-      !    write (iunit) riv_info_pix (:,1:nrivpix)
-      !    close (iunit)
-      ! end if
+      IF (p_is_master) write(*,'(/A)') 'Step 5: Output results ...'
 
-      if (trim(storage_type) == 'one') then
+      IF (trim(storage_type) == 'one') THEN
 
-         ! shrink regions
-         DO WHILE (.true.)
-            iblk = (inorth-1)/nbox + 1
-            found = .false.
-            DO jblk = 1, mblock
-               if (bkid(iblk,jblk) == p_iam_glb) then
-                  iloc = inorth - blks(iblk,jblk)%idsp
-                  IF (any(blks(iblk,jblk)%icat(iloc,:) > 0)) THEN
-                     found = .true.
-                     exit
-                  ENDIF
-               ENDIF
-            ENDDO
+         IF (p_is_master) THEN
 
-            CALL mpi_allreduce (MPI_IN_PLACE, found, 1, MPI_LOGICAL, MPI_LOR, p_comm_glb, p_err)
+            ! shrink regions
+            inorth = allinfo%bsn_bnds(1,1)
+            isouth = allinfo%bsn_bnds(2,1)
+            jwest  = allinfo%bsn_bnds(3,1)
+            jeast  = allinfo%bsn_bnds(4,1)
 
-            IF (found) THEN
-               exit
-            ELSE
-               inorth = inorth + 1
-            ENDIF
-         ENDDO 
-
-         DO WHILE (.true.)
-            iblk = (isouth-1)/nbox + 1
-            found = .false.
-            DO jblk = 1, mblock
-               if (bkid(iblk,jblk) == p_iam_glb) then
-                  iloc = isouth - blks(iblk,jblk)%idsp
-                  IF (any(blks(iblk,jblk)%icat(iloc,:) > 0)) THEN
-                     found = .true.
-                     exit
-                  ENDIF
-               ENDIF
-            ENDDO
-
-            CALL mpi_allreduce (MPI_IN_PLACE, found, 1, MPI_LOGICAL, MPI_LOR, p_comm_glb, p_err)
-
-            IF (found) THEN
-               exit
-            ELSE
-               isouth = isouth - 1
-            ENDIF
-         ENDDO 
-
-         IF (jwest /= jeast) then
-            DO WHILE (.true.)
-               jblk = (jwest-1)/mbox + 1
-               found = .false.
-               DO iblk = 1, nblock
-                  if (bkid(iblk,jblk) == p_iam_glb) then
-                     iloc = jwest - blks(iblk,jblk)%jdsp
-                     IF (any(blks(iblk,jblk)%icat(:,iloc) > 0)) THEN
-                        found = .true.
-                        exit
-                     ENDIF
-                  ENDIF
+            thisinfo => allinfo
+            DO WHILE (associated(thisinfo))
+               
+               DO ic = 1, thisinfo%ntotalcat
+                  inorth = min     (inorth, thisinfo%bsn_bnds(1,ic))
+                  isouth = max     (isouth, thisinfo%bsn_bnds(2,ic))
+                  jwest  = min_west(jwest , thisinfo%bsn_bnds(3,ic))
+                  jeast  = max_east(jeast , thisinfo%bsn_bnds(4,ic))
                ENDDO
 
-               CALL mpi_allreduce (MPI_IN_PLACE, found, 1, MPI_LOGICAL, MPI_LOR, p_comm_glb, p_err)
+               thisinfo => thisinfo%next
+            ENDDO
+            
+            write(*,*) 'region after shrink (nswe): ', inorth, isouth, jwest, jeast
 
-               IF (found) THEN
-                  exit
-               ELSE
-                  jwest = jwest + 1
-                  IF (jwest == mglb+1) jwest = 1
-               ENDIF
-            ENDDO 
+            filename = trim(output_dir) // '/' // trim(casename) // '.nc'
 
-            DO WHILE (.true.)
-               jblk = (jeast-1)/mbox + 1
-               found = .false.
-               DO iblk = 1, nblock
-                  if (bkid(iblk,jblk) == p_iam_glb) then
-                     iloc = jeast - blks(iblk,jblk)%jdsp
-                     IF (any(blks(iblk,jblk)%icat(:,iloc) > 0)) THEN
-                        found = .true.
-                        exit
-                     ENDIF
-                  ENDIF
-               ENDDO
-
-               CALL mpi_allreduce (MPI_IN_PLACE, found, 1, MPI_LOGICAL, MPI_LOR, p_comm_glb, p_err)
-
-               IF (found) THEN
-                  exit
-               ELSE
-                  jeast = jeast - 1
-                  IF (jeast == 0) jeast = mglb
-               ENDIF
-            ENDDO 
-         ENDIF
-
-         if (p_is_master) then
+            CALL ncio_create_file  (filename)
+            CALL ncio_write_serial (filename, 'inorth', inorth)
+            CALL ncio_write_serial (filename, 'isouth', isouth)
+            CALL ncio_write_serial (filename, 'jwest', jwest)
+            CALL ncio_write_serial (filename, 'jeast', jeast)
 
             np = isouth - inorth + 1
-            if (jeast == jwest) then
-               mp = mglb
-            else
-               mp = jeast  - jwest  + 1
-               if (mp < 0) mp = mp + mglb 
-            end if
+            mp = jeast  - jwest  + 1
+            IF (mp < 0) mp = mp + mglb 
 
             allocate (latitude (np))
             allocate (longitude(mp))
@@ -149,31 +76,14 @@ CONTAINS
             allocate (elv   (np,mp))
             allocate (hunit (np,mp))
 
-            if (jwest /= jeast) then
-               call aggregate_data (inorth, isouth, jwest, jeast, & 
-                  np, mp, longitude, latitude, &
-                  icat = catch, hnd = hnd, elv = elv, hunit = hunit)
-            else
-               call aggregate_data (inorth, isouth, 1, mglb, & 
-                  np, mp, longitude, latitude, &
-                  icat = catch, hnd = hnd, elv = elv, hunit = hunit)
-            end if
+            CALL aggregate_data (inorth, isouth, jwest, jeast, & 
+               np, mp, longitude, latitude, &
+               icat = catch, hnd = hnd, elv = elv, hunit = hunit)
 
-            filename = trim(output_dir) // '/' // trim(casename) // '.nc'
-
-            call ncio_create_file (filename)
-            call ncio_write_serial (filename, 'inorth', inorth)
-            call ncio_write_serial (filename, 'isouth', isouth)
-            call ncio_write_serial (filename, 'jwest', jwest)
-            call ncio_write_serial (filename, 'jeast', jeast)
-
-            nlat = isouth - inorth + 1
-            nlon = jeast - jwest + 1
-            IF (nlon < 0) nlon = nlon + mglb
-            CALL ncio_define_dimension (filename, 'latitude', nlat)
-            CALL ncio_define_dimension (filename, 'longitude', nlon)
-            call ncio_write_serial (filename, 'latitude', latitude,  'latitude')
-            call ncio_write_serial (filename, 'longitude', longitude, 'longitude')
+            CALL ncio_define_dimension (filename, 'latitude', np)
+            CALL ncio_define_dimension (filename, 'longitude', mp)
+            CALL ncio_write_serial (filename, 'latitude', latitude,  'latitude')
+            CALL ncio_write_serial (filename, 'longitude', longitude, 'longitude')
             
             CALL ncio_put_attr_str (filename, 'latitude', 'long_name', 'latitude')
             CALL ncio_put_attr_str (filename, 'latitude', 'units', 'degrees_north')
@@ -181,10 +91,10 @@ CONTAINS
             CALL ncio_put_attr_str (filename, 'longitude', 'units', 'degrees_east')
 
 
-            call ncio_write_serial (filename, 'icatchment2d', catch, 'latitude', 'longitude', compress = 1)
-            call ncio_write_serial (filename, 'hand',   hnd  , 'latitude', 'longitude', compress = 1)
-            call ncio_write_serial (filename, 'elva',   elv  , 'latitude', 'longitude', compress = 1)
-            call ncio_write_serial (filename, 'ihydrounit2d', hunit, 'latitude', 'longitude', compress = 1)
+            CALL ncio_write_serial (filename, 'icatchment2d', catch, 'latitude', 'longitude', compress = 1)
+            CALL ncio_write_serial (filename, 'hand',   hnd  , 'latitude', 'longitude', compress = 1)
+            CALL ncio_write_serial (filename, 'elva',   elv  , 'latitude', 'longitude', compress = 1)
+            CALL ncio_write_serial (filename, 'ihydrounit2d', hunit, 'latitude', 'longitude', compress = 1)
 
             deallocate (latitude )
             deallocate (longitude)
@@ -193,102 +103,251 @@ CONTAINS
             deallocate (elv  )
             deallocate (hunit)
 
-            call excute_data_task (t_exit)
+            CALL excute_data_task (t_exit)
 
-         elseif (p_is_data) then
-            call data_daemon ()
-         end if
+         ELSEIF (p_is_data) THEN
+            CALL data_daemon ()
+         ENDIF
 
-      elseif (trim(storage_type) == 'block') then
-
-         if (p_is_master) then
-
-            mkdirname = 'mkdir -p ' // trim(output_dir) // '/' // trim(casename)
-            call system(trim(mkdirname))
-
-            call mpi_barrier (p_comm_data, p_err)
-
-         elseif (p_is_data) then
-
-            call mpi_barrier (p_comm_data, p_err)
-
-            do jblk = 1, mblock
-               do iblk = 1, nblock
-                  if (bkid(iblk,jblk) == p_iam_glb) then
-
-                     call get_filename (trim(output_dir) // '/' // trim(casename), &
-                        iblk, jblk, filename)
-
-                     call ncio_create_file (filename)
-                     CALL ncio_define_dimension (filename, 'latitude',  nbox)
-                     CALL ncio_define_dimension (filename, 'longitude', mbox)
-                     call ncio_write_serial (filename, 'latitude',  blks(iblk,jblk)%lat, 'latitude' ) 
-                     call ncio_write_serial (filename, 'longitude', blks(iblk,jblk)%lon, 'longitude')
-
-                     call ncio_write_serial (filename, 'icatchment2d', blks(iblk,jblk)%icat, &
-                        'latitude', 'longitude', compress = 1)
-                     call ncio_write_serial (filename, 'hand',   blks(iblk,jblk)%hnd,  'latitude', 'longitude', compress = 1)
-                     call ncio_write_serial (filename, 'elva',   blks(iblk,jblk)%elv,  'latitude', 'longitude', compress = 1)
-                     call ncio_write_serial (filename, 'ihydrounit2d', blks(iblk,jblk)%hunit, &
-                        'latitude', 'longitude', compress = 1)
-
-                  end if
-               end do
-            end do
-
-         end if
-
-      end if
-
+      ENDIF
+      
       IF (p_is_master) THEN
 
-         allocate (riv_info_dep (ntotalcat))
-         riv_info_dep(:) = 40.
+         outinfo%ntotalcat = 0
+         thisinfo => allinfo
+         DO WHILE (associated(thisinfo))
+            outinfo%ntotalcat = outinfo%ntotalcat + thisinfo%ntotalcat
+            thisinfo => thisinfo%next
+         ENDDO
 
          filename = trim(output_dir) // '/' // trim(casename) // '.nc'
-         if (trim(storage_type) == 'block') then
+         IF (trim(storage_type) == 'block') THEN
             CALL ncio_create_file (filename)
          ENDIF
 
-         CALL ncio_define_dimension (filename, 'catchment', ntotalcat)
+         CALL ncio_define_dimension (filename, 'catchment', outinfo%ntotalcat)
          CALL ncio_define_dimension (filename, 'hydrounit', maxhunum)
          CALL ncio_define_dimension (filename, 'neighbour', maxnnb)
          CALL ncio_define_dimension (filename, 'ncds', 2)
+
+
+         ! ----- output : hydro unit index -----
+         allocate(outinfo%hru_indx (maxhunum, outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%hru_indx(:,dsp+1:dsp+nthis) = thisinfo%hru_indx
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'hydrounit_index', outinfo%hru_indx, &
+            'hydrounit', 'catchment', compress = 1)
+
+         ! ----- output : hydro unit area -----
+         allocate(outinfo%hru_area (maxhunum, outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%hru_area(:,dsp+1:dsp+nthis) = thisinfo%hru_area
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'hydrounit_area', outinfo%hru_area, &
+            'hydrounit', 'catchment', compress = 1)
          
-         call ncio_write_serial (filename, 'lake_id', lake_info_id, 'catchment', compress = 1)
+         ! ----- output : hydro unit hand -----
+         allocate(outinfo%hru_hand (maxhunum, outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%hru_hand(:,dsp+1:dsp+nthis) = thisinfo%hru_hand
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
 
-         call ncio_write_serial (filename, 'hydrounit_index', hru_info_indx, &
-            'hydrounit', 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'hydrounit_area', hru_info_area, &
-            'hydrounit', 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'hydrounit_downstream', hru_info_next, &
-            'hydrounit', 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'hydrounit_hand', hru_info_hand, &
-            'hydrounit', 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'hydrounit_elva', hru_info_elva, &
-            'hydrounit', 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'hydrounit_pathlen', hru_info_plen, &
-            'hydrounit', 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'hydrounit_facelen', hru_info_lfac, &
+         CALL ncio_write_serial (filename, 'hydrounit_hand', outinfo%hru_hand, &
             'hydrounit', 'catchment', compress = 1)
 
-         call ncio_write_serial (filename, 'river_length',      riv_info_len, 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'river_elevation',   riv_info_elv, 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'river_depth',       riv_info_dep, 'catchment', compress = 1)
+         ! ----- output : hydro unit elevation -----
+         allocate(outinfo%hru_elva (maxhunum, outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%hru_elva(:,dsp+1:dsp+nthis) = thisinfo%hru_elva
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
 
-         call ncio_write_serial (filename, 'river_pixel_start', riv_info_stt, 'ncds', 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'river_pixel_end',   riv_info_end, 'ncds', 'catchment', compress = 1)
+         CALL ncio_write_serial (filename, 'hydrounit_elva', outinfo%hru_elva, &
+            'hydrounit', 'catchment', compress = 1)
 
-         call ncio_write_serial (filename, 'basin_numhru', bsn_info_num_hru, 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'basin_downstream', bsn_info_downstream, 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'num_neighbour', bsn_info_num_nbr, 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'idx_neighbour', bsn_info_idx_nbr, &
+         ! ----- output : hydro unit downstream -----
+         allocate(outinfo%hru_next (maxhunum, outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%hru_next(:,dsp+1:dsp+nthis) = thisinfo%hru_next
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'hydrounit_downstream', outinfo%hru_next, &
+            'hydrounit', 'catchment', compress = 1)
+
+         ! ----- output : hydro unit path length -----
+         allocate(outinfo%hru_plen (maxhunum, outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%hru_plen(:,dsp+1:dsp+nthis) = thisinfo%hru_plen
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'hydrounit_pathlen', outinfo%hru_plen, &
+            'hydrounit', 'catchment', compress = 1)
+
+         ! ----- output : hydro unit drianage contour length -----
+         allocate(outinfo%hru_lfac (maxhunum, outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%hru_lfac(:,dsp+1:dsp+nthis) = thisinfo%hru_lfac
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'hydrounit_facelen', outinfo%hru_lfac, &
+            'hydrounit', 'catchment', compress = 1)
+
+         ! ----- output : river length -----
+         allocate(outinfo%riv_len (outinfo%ntotalcat));   outinfo%riv_len(:) = spval
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%nrivseg
+            outinfo%riv_len(dsp+1:dsp+nthis) = thisinfo%riv_len
+            dsp = dsp + thisinfo%ntotalcat
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'river_length', outinfo%riv_len, &
+            'catchment', compress = 1)
+         CALL ncio_put_attr_real4 (filename, 'river_length', 'missing_value', spval)
+
+         ! ----- output : river elevation -----
+         allocate(outinfo%riv_elv (outinfo%ntotalcat));   outinfo%riv_elv(:) = spval
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%nrivseg
+            outinfo%riv_elv(dsp+1:dsp+nthis) = thisinfo%riv_elv
+            dsp = dsp + thisinfo%ntotalcat
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'river_elevation', outinfo%riv_elv, &
+            'catchment', compress = 1)
+         CALL ncio_put_attr_real4 (filename, 'river_elevation', 'missing_value', spval)
+
+         ! ----- output : number of hydro units in a basin -----
+         allocate(outinfo%bsn_num_hru (outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%bsn_num_hru(dsp+1:dsp+nthis) = thisinfo%bsn_num_hru
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'basin_numhru', outinfo%bsn_num_hru, &
+            'catchment', compress = 1)
+
+         ! ----- output : downstream basin -----
+         allocate(outinfo%bsn_downstream (outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%bsn_downstream(dsp+1:dsp+nthis) = thisinfo%bsn_downstream
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'basin_downstream', outinfo%bsn_downstream, &
+            'catchment', compress = 1)
+         
+         ! ----- output : number of neighbours of a basin -----
+         allocate(outinfo%bsn_num_nbr (outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%bsn_num_nbr(dsp+1:dsp+nthis) = thisinfo%bsn_num_nbr
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'num_neighbour', outinfo%bsn_num_nbr, &
+            'catchment', compress = 1)
+
+         ! ----- output : neighbour index of a basin -----
+         allocate(outinfo%bsn_idx_nbr (maxnnb, outinfo%ntotalcat))
+         outinfo%bsn_idx_nbr(:,:) = -1
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            ndim1 = size(thisinfo%bsn_idx_nbr,1)
+            outinfo%bsn_idx_nbr(1:ndim1,dsp+1:dsp+nthis) = thisinfo%bsn_idx_nbr
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'idx_neighbour', outinfo%bsn_idx_nbr, &
             'neighbour', 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'len_border', bsn_info_len_bdr, &
+
+         ! ----- output : length of border between a basin and its neighbours -----
+         allocate(outinfo%bsn_len_bdr (maxnnb, outinfo%ntotalcat))
+         outinfo%bsn_len_bdr(:,:) = 0
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            ndim1 = size(thisinfo%bsn_len_bdr,1)
+            outinfo%bsn_len_bdr(1:ndim1,dsp+1:dsp+nthis) = thisinfo%bsn_len_bdr
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'len_border', outinfo%bsn_len_bdr, &
             'neighbour', 'catchment', compress = 1)
-         call ncio_write_serial (filename, 'basin_elevation', bsn_info_elva, 'catchment', compress = 1)
+
+         ! ----- output : basin elevation -----
+         allocate(outinfo%bsn_elva (outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%bsn_elva(dsp+1:dsp+nthis) = thisinfo%bsn_elva
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'basin_elevation', outinfo%bsn_elva, &
+            'catchment', compress = 1)
+
+         ! ----- output : lake id -----
+         allocate(outinfo%lake_id (outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            outinfo%lake_id(dsp+1:dsp+nthis) = thisinfo%lake_id
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+         
+         CALL ncio_write_serial (filename, 'lake_id', outinfo%lake_id, 'catchment', compress = 1)
 
       ENDIF
+
+      CALL mpi_barrier (p_comm_glb, p_err)
+      CALL mpi_finalize(p_err)
 
    END SUBROUTINE output_result 
 
