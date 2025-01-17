@@ -243,7 +243,7 @@ CONTAINS
       integer (kind = 4) :: nunit, iunit, junit, unit_next, unext
 
       integer (kind = 4) :: npxl, ipxl
-      integer (kind = 4) :: i, j, inext, jnext, iloc, ij(2)
+      integer (kind = 4) :: i, j, inext, jnext, ilast, jlast, iloc, ij(2)
       logical :: is_new
 
       real    (kind = 4), allocatable :: h1d (:)
@@ -367,28 +367,44 @@ CONTAINS
                unit_next = -2
             ENDIF
 
+            nnode = 1
+            route(:,1) = (/i, j/)
+
             DO WHILE (area_this < levsize)
                
-               i = ij_sorted(1,ipxl)
-               j = ij_sorted(2,ipxl)
-
                found = .false.
-               DO jnb = max(j-1,1), min(j+1,mp)
-                  DO inb = max(i-1,1), min(i+1,np)
-                     IF ((inb /= i) .or. (jnb /= j)) THEN
-                        IF (hmask(inb,jnb) .and. (hunit(inb,jnb) == -1)) THEN
 
-                           CALL nextij (inb,jnb, dir(inb,jnb),inext,jnext, is_local = .true.)
+               ipxl = order2d(route(1,1),route(2,1))
 
-                           IF ((hunit(inext,jnext) == nunit) .or. (hunit(inext,jnext) == unit_next)) THEN
-                              IF (order2d(inb,jnb) < ipxl) THEN
+               DO inode = 1, nnode
+
+                  i = route(1,inode)
+                  j = route(2,inode)
+
+                  ipxl = min(order2d(i,j), ipxl) 
+
+                  DO jnb = max(j-1,1), min(j+1,mp)
+                     DO inb = max(i-1,1), min(i+1,np)
+                        IF ((inb /= i) .or. (jnb /= j)) THEN
+                           IF (hmask(inb,jnb) .and. (hunit(inb,jnb) == -1) .and. (order2d(inb,jnb) < ipxl)) THEN
+
+                              inext = inb
+                              jnext = jnb
+                              DO WHILE (hunit(inext,jnext) == -1)
+                                 ilast = inext
+                                 jlast = jnext
+                                 CALL nextij (ilast,jlast, dir(ilast,jlast),inext,jnext, is_local = .true.)
+                              ENDDO
+
+                              IF ((hunit(inext,jnext) == nunit) .or. (hunit(inext,jnext) == unit_next)) THEN
                                  found = .true.
-                                 ipxl = order2d(inb,jnb)
+                                 ipxl = min(order2d(inb,jnb), ipxl)
                               ENDIF
                            ENDIF
                         ENDIF
-                     ENDIF
+                     ENDDO
                   ENDDO
+
                ENDDO
 
                IF (.not. found) THEN
@@ -432,10 +448,22 @@ CONTAINS
                ENDIF
 
                IF (found) THEN
+
                   i = ij_sorted(1,ipxl)
                   j = ij_sorted(2,ipxl)
-                  hunit(i,j) = nunit
-                  area_this = area_this + area(i,j)
+
+                  nnode = 0
+                  DO WHILE (hunit(i,j) == -1)
+                     nnode = nnode + 1
+                     route(:,nnode) = (/i, j/)
+                     hunit(i,j) = nunit
+                     area_this = area_this + area(i,j)
+                        
+                     CALL nextij (i,j, dir(i,j),inext,jnext, is_local = .true.)
+                     i = inext
+                     j = jnext
+                  ENDDO
+
                ELSE
                   EXIT
                ENDIF

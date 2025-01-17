@@ -588,39 +588,83 @@ CONTAINS
                south  = bndinfo(2,icat)
                west   = bndinfo(3,icat)
                east   = bndinfo(4,icat)
+
+               IF ((south-1)/nbox - (north-1)/nbox > 1) THEN
+                  
+                  DO i = north, south
+                     j = west
+                     DO WHILE (.true.)
+                        IF (get_icat(i,j) == catnum) THEN
+                           dir_this = get_dir (i, j)
+                           ! 0: river mouth; -1: inland depression; 
+                           IF ((dir_this /= 0) .and. (dir_this /= -1)) THEN
+                              CALL nextij (i, j, dir_this, i_dn, j_dn)
+                              IF (within_region(i_dn,j_dn)) THEN
+                                 cdthis = get_icat(i_dn,j_dn)
+                                 IF (cdthis == 0) cdthis = -3 ! downstream is land, but not in the region.
+                              ELSE
+                                 cdthis = -3
+                              ENDIF
+
+                              IF (cdthis /= catnum) THEN
+                                 IF (catdown(icat) /= -9999) THEN
+                                    IF (cdthis /= catdown(icat)) THEN
+                                       write(*,'(A,I7,A,I7,A,I7,A,I7,A)') &
+                                          'Warning: more than ONE downstream catchment : ',  &
+                                          cat_id(icat), ',', lake_id(icat), '(', catdown(icat), '->', &
+                                          cdthis, ')'
+                                    ENDIF
+                                 ELSE
+                                    catdown(icat) = cdthis
+                                 ENDIF
+                              ENDIF
+                           ELSE
+                              catdown(icat) = dir_this
+                           ENDIF
+                        ENDIF
+
+                        IF (j == east) THEN
+                           EXIT
+                        ELSE
+                           j = mod(j,mglb) + 1
+                        ENDIF
+                     ENDDO
+                  ENDDO
                         
-               ip = 0
-               DO i = north, south
+               ELSE
+
                   j = west
                   DO WHILE (.true.)
-                     IF (get_icat(i,j) == catnum) THEN
-                        dir_this = get_dir (i, j)
-                        ! 0: river mouth; -1: inland depression; 
-                        IF ((dir_this /= 0) .and. (dir_this /= -1)) THEN
-                           CALL nextij (i, j, dir_this, i_dn, j_dn)
-                           IF (within_region(i_dn,j_dn)) THEN
-                              cdthis = get_icat(i_dn,j_dn)
-                              IF (cdthis == 0) cdthis = -3 ! downstream is land, but not in the region.
-                           ELSE
-                              cdthis = -3
-                           ENDIF
-
-                           IF (cdthis /= catnum) THEN
-                              IF (catdown(icat) /= -9999) THEN
-                                 IF (cdthis /= catdown(icat)) THEN
-                                    write(*,'(A,I7,A,I7,A,I7,A,I7,A)') &
-                                       'Warning: more than ONE downstream catchment : ',  &
-                                       cat_id(icat), ',', lake_id(icat), '(', catdown(icat), '->', &
-                                       cdthis, ')'
-                                 ENDIF
+                     DO i = north, south
+                        IF (get_icat(i,j) == catnum) THEN
+                           dir_this = get_dir (i, j)
+                           ! 0: river mouth; -1: inland depression; 
+                           IF ((dir_this /= 0) .and. (dir_this /= -1)) THEN
+                              CALL nextij (i, j, dir_this, i_dn, j_dn)
+                              IF (within_region(i_dn,j_dn)) THEN
+                                 cdthis = get_icat(i_dn,j_dn)
+                                 IF (cdthis == 0) cdthis = -3 ! downstream is land, but not in the region.
                               ELSE
-                                 catdown(icat) = cdthis
+                                 cdthis = -3
                               ENDIF
+
+                              IF (cdthis /= catnum) THEN
+                                 IF (catdown(icat) /= -9999) THEN
+                                    IF (cdthis /= catdown(icat)) THEN
+                                       write(*,'(A,I7,A,I7,A,I7,A,I7,A)') &
+                                          'Warning: more than ONE downstream catchment : ',  &
+                                          cat_id(icat), ',', lake_id(icat), '(', catdown(icat), '->', &
+                                          cdthis, ')'
+                                    ENDIF
+                                 ELSE
+                                    catdown(icat) = cdthis
+                                 ENDIF
+                              ENDIF
+                           ELSE
+                              catdown(icat) = dir_this
                            ENDIF
-                        ELSE
-                           catdown(icat) = dir_this
                         ENDIF
-                     ENDIF
+                     ENDDO
 
                      IF (j == east) THEN
                         EXIT
@@ -628,7 +672,8 @@ CONTAINS
                         j = mod(j,mglb) + 1
                      ENDIF
                   ENDDO
-               ENDDO
+
+               ENDIF
                            
                write(*,103) trim(binfo), p_iam_glb, cat_id(icat), catdown(icat)
                103 format('(S2) Downstream ', A, ': On', I4, ' From ', I7, ' to ', I7)
