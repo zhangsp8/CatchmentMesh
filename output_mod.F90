@@ -32,24 +32,25 @@ CONTAINS
 
       IF (p_is_master) write(*,'(/A)') 'Step 5: Output results ...'
 
-      IF (trim(storage_type) == 'one') THEN
-
-         IF (p_is_master) THEN
+         
+      IF (p_is_master) THEN
+     
+         IF (trim(storage_type) == 'one') THEN
 
             ! shrink regions
-            inorth = allinfo%bsn_bnds(1,1)
-            isouth = allinfo%bsn_bnds(2,1)
-            jwest  = allinfo%bsn_bnds(3,1)
-            jeast  = allinfo%bsn_bnds(4,1)
+            inorth = allinfo%bsn_nswe(1,1)
+            isouth = allinfo%bsn_nswe(2,1)
+            jwest  = allinfo%bsn_nswe(3,1)
+            jeast  = allinfo%bsn_nswe(4,1)
 
             thisinfo => allinfo
             DO WHILE (associated(thisinfo))
                
                DO ic = 1, thisinfo%ntotalcat
-                  inorth = min     (inorth, thisinfo%bsn_bnds(1,ic))
-                  isouth = max     (isouth, thisinfo%bsn_bnds(2,ic))
-                  jwest  = min_west(jwest , thisinfo%bsn_bnds(3,ic))
-                  jeast  = max_east(jeast , thisinfo%bsn_bnds(4,ic))
+                  inorth = min     (inorth, thisinfo%bsn_nswe(1,ic))
+                  isouth = max     (isouth, thisinfo%bsn_nswe(2,ic))
+                  jwest  = min_west(jwest , thisinfo%bsn_nswe(3,ic))
+                  jeast  = max_east(jeast , thisinfo%bsn_nswe(4,ic))
                ENDDO
 
                thisinfo => thisinfo%next
@@ -77,7 +78,7 @@ CONTAINS
             allocate (hunit (np,mp))
 
             CALL aggregate_data (inorth, isouth, jwest, jeast, & 
-               np, mp, longitude, latitude, &
+               np, mp, longitude = longitude, latitude = latitude, &
                icat = catch, hnd = hnd, elv = elv, hunit = hunit)
 
             CALL ncio_define_dimension (filename, 'latitude', np)
@@ -103,15 +104,7 @@ CONTAINS
             deallocate (elv  )
             deallocate (hunit)
 
-            CALL excute_data_task (t_exit)
-
-         ELSEIF (p_is_data) THEN
-            CALL data_daemon ()
          ENDIF
-
-      ENDIF
-      
-      IF (p_is_master) THEN
 
          outinfo%ntotalcat = 0
          thisinfo => allinfo

@@ -11,7 +11,7 @@ PROGRAM main
    IMPLICIT NONE
 
    integer (kind = 4) :: narg
-   character(len=256) :: deldir, nlfile, rmfile
+   character(len=256) :: deldir, nlfile, rmfile, filename
    real (kind=4) :: west,  east    ! -180 to 180
    real (kind=4) :: south, north   ! -90 to 90
    logical :: has_predefined_rivermouth, end_of_data
@@ -58,14 +58,15 @@ PROGRAM main
    CALL mpi_bcast (output_dir,   256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
    CALL mpi_bcast (casename,     256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
    CALL mpi_bcast (storage_type, 256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (catsize,     1, MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (catsizemin,  1, MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (lakecellsize,1, MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (nlev_max, 1, MPI_INTEGER, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (west,  1, MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (east,  1, MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (south, 1, MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (north, 1, MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (catsize,        1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (catsizemin,     1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (lakecellsize,   1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (nlev_max,       1,   MPI_INTEGER, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (west,           1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (east,           1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (south,          1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (north,          1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+
    CALL mpi_bcast (has_predefined_rivermouth, 1, MPI_LOGICAL, p_master_address, p_comm_glb, p_err)
    
    ! Step 0: Initializing data and work.
@@ -78,7 +79,6 @@ PROGRAM main
 
    CALL get_region (west, east, north, south)
    CALL init_area ()
-   CALL init_window ()
 
    thisinfo => allinfo
    thisinfo%icatdsp = 0
@@ -113,7 +113,23 @@ PROGRAM main
          ntotalall = ntotalall + thisinfo%ntotalcat
       ENDIF
 
-      IF (p_is_data .and. (trim(storage_type) == 'block')) CALL flush_blocks (output = .true.)
+      IF (p_is_master .and. (trim(storage_type) == 'block')) THEN
+
+         CALL flush_blocks (output = .true.)
+
+         CALL get_filename (trim(output_dir) // '/' // trim(casename), ithisblk, jthisblk, filename)
+
+         CALL ncio_define_dimension (filename, 'basin', thisinfo%ntotalcat)
+         CALL ncio_define_dimension (filename, 'bnd4' , 4)
+         CALL ncio_write_serial (filename, 'bsn_index', thisinfo%bsn_index, 'basin', compress = 1)
+         CALL ncio_write_serial (filename, 'lake_id'  , thisinfo%lake_id  , 'basin', compress = 1)
+         CALL ncio_write_serial (filename, 'bsn_nswe' , thisinfo%bsn_nswe,  'bnd4', 'basin', compress = 1)
+
+         CALL ncio_define_dimension (filename, 'river', thisinfo%nrivseg)
+         CALL ncio_write_serial (filename, 'riv_len', thisinfo%riv_len, 'river', compress = 1)
+         CALL ncio_write_serial (filename, 'riv_elv', thisinfo%riv_elv, 'river', compress = 1)
+
+      ENDIF
 
       CALL mpi_bcast (ntotalall, 1, MPI_INTEGER, p_master_address, p_comm_glb, p_err)
 

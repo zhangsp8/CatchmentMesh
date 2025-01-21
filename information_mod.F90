@@ -88,17 +88,9 @@ CONTAINS
             thisinfo => thisinfo%next
          ENDDO
    
-         CALL mpi_bcast (numblocks, 1, MPI_INTEGER, p_master_address, p_comm_work, p_err)
+         CALL mpi_bcast (numblocks, 1, MPI_INTEGER, p_master_address, p_comm_glb, p_err)
 
          maxnnb = 0
-
-         allocate (indxhu (maxhunum))
-         allocate (areahu (maxhunum))
-         allocate (nexthu (maxhunum))
-         allocate (handhu (maxhunum))
-         allocate (elvahu (maxhunum))
-         allocate (plenhu (maxhunum))
-         allocate (lfachu (maxhunum))
 
          thisinfo => allinfo
          DO WHILE (.true.)
@@ -130,8 +122,7 @@ CONTAINS
             ndone = 0
             DO WHILE (.true.)
 
-               CALL mpi_recv (mesg(1:2), 2, MPI_INTEGER, &
-                  MPI_ANY_SOURCE, 0, p_comm_work, p_stat, p_err)
+               CALL mpi_recv (mesg(1:2), 2, MPI_INTEGER, MPI_ANY_SOURCE, 0, p_comm_glb, p_stat, p_err)
 
                iwork  = mesg(1)
                catnum = mesg(2)
@@ -141,40 +132,30 @@ CONTAINS
 
                   lakeid = thisinfo%lake_id(jcat)
 
-                  CALL mpi_recv (nurecv, 1, MPI_INTEGER, iwork, 1, p_comm_work, p_stat, p_err)
+                  CALL mpi_recv (nurecv, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_stat, p_err)
 
                   thisinfo%bsn_num_hru(jcat) = nurecv
 
                   IF (lakeid <= 0) THEN
-                     CALL mpi_recv (indxhu(1:nurecv), nurecv, MPI_INTEGER, iwork, 1, p_comm_work, p_stat, p_err)
-                     CALL mpi_recv (areahu(1:nurecv), nurecv, MPI_REAL4,   iwork, 1, p_comm_work, p_stat, p_err)
-                     CALL mpi_recv (nexthu(1:nurecv), nurecv, MPI_INTEGER, iwork, 1, p_comm_work, p_stat, p_err)
-                     CALL mpi_recv (handhu(1:nurecv), nurecv, MPI_REAL4,   iwork, 1, p_comm_work, p_stat, p_err)
-                     CALL mpi_recv (elvahu(1:nurecv), nurecv, MPI_REAL4,   iwork, 1, p_comm_work, p_stat, p_err)
-                     CALL mpi_recv (plenhu(1:nurecv), nurecv, MPI_REAL4,   iwork, 1, p_comm_work, p_stat, p_err)
-                     CALL mpi_recv (lfachu(1:nurecv), nurecv, MPI_REAL4,   iwork, 1, p_comm_work, p_stat, p_err)
+                     CALL mpi_recv (thisinfo%hru_indx(1:nurecv,jcat), nurecv, MPI_INTEGER, iwork, 1, p_comm_glb, p_stat, p_err)
+                     CALL mpi_recv (thisinfo%hru_area(1:nurecv,jcat), nurecv, MPI_REAL4,   iwork, 1, p_comm_glb, p_stat, p_err)
+                     CALL mpi_recv (thisinfo%hru_next(1:nurecv,jcat), nurecv, MPI_INTEGER, iwork, 1, p_comm_glb, p_stat, p_err)
+                     CALL mpi_recv (thisinfo%hru_hand(1:nurecv,jcat), nurecv, MPI_REAL4,   iwork, 1, p_comm_glb, p_stat, p_err)
+                     CALL mpi_recv (thisinfo%hru_elva(1:nurecv,jcat), nurecv, MPI_REAL4,   iwork, 1, p_comm_glb, p_stat, p_err)
+                     CALL mpi_recv (thisinfo%hru_plen(1:nurecv,jcat), nurecv, MPI_REAL4,   iwork, 1, p_comm_glb, p_stat, p_err)
+                     CALL mpi_recv (thisinfo%hru_lfac(1:nurecv,jcat), nurecv, MPI_REAL4,   iwork, 1, p_comm_glb, p_stat, p_err)
                   ENDIF
 
-                  CALL mpi_recv (thisinfo%bsn_elva(jcat), 1, MPI_REAL4, iwork, 1, p_comm_work, p_stat, p_err)
+                  CALL mpi_recv (thisinfo%bsn_elva(jcat), 1, MPI_REAL4, iwork, 1, p_comm_glb, p_stat, p_err)
 
-                  CALL mpi_recv (nnb, 1, MPI_INTEGER, iwork, 1, p_comm_work, p_stat, p_err)
+                  CALL mpi_recv (nnb, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_stat, p_err)
                   bsn_nbr(jcat)%nnb = nnb
                   IF (nnb > 0) THEN
                      maxnnb = max(nnb, maxnnb)
                      allocate (bsn_nbr(jcat)%nbr_index(nnb))
                      allocate (bsn_nbr(jcat)%lenborder(nnb))
-                     CALL mpi_recv (bsn_nbr(jcat)%nbr_index, nnb, MPI_INTEGER, iwork, 1, p_comm_work, p_stat, p_err)
-                     CALL mpi_recv (bsn_nbr(jcat)%lenborder, nnb, MPI_REAL4  , iwork, 1, p_comm_work, p_stat, p_err)
-                  ENDIF
-
-                  IF (lakeid <= 0) THEN
-                     thisinfo%hru_indx(1:nurecv,jcat) = indxhu(1:nurecv)
-                     thisinfo%hru_area(1:nurecv,jcat) = areahu(1:nurecv) 
-                     thisinfo%hru_next(1:nurecv,jcat) = nexthu(1:nurecv)
-                     thisinfo%hru_hand(1:nurecv,jcat) = handhu(1:nurecv)
-                     thisinfo%hru_elva(1:nurecv,jcat) = elvahu(1:nurecv)
-                     thisinfo%hru_plen(1:nurecv,jcat) = plenhu(1:nurecv)
-                     thisinfo%hru_lfac(1:nurecv,jcat) = lfachu(1:nurecv)
+                     CALL mpi_recv (bsn_nbr(jcat)%nbr_index, nnb, MPI_INTEGER, iwork, 1, p_comm_glb, p_stat, p_err)
+                     CALL mpi_recv (bsn_nbr(jcat)%lenborder, nnb, MPI_REAL4  , iwork, 1, p_comm_glb, p_stat, p_err)
                   ENDIF
 
                ENDIF
@@ -183,17 +164,60 @@ CONTAINS
 
                   catnum = thisinfo%icatdsp+icat
 
-                  CALL mpi_send (catnum, 1, MPI_INTEGER, iwork, 2, p_comm_work, p_err) 
-                  CALL mpi_send (thisinfo%lake_id (icat),   1, MPI_INTEGER, iwork, 2, p_comm_work, p_err) 
-                  CALL mpi_send (thisinfo%bsn_bnds(:,icat), 4, MPI_INTEGER, iwork, 2, p_comm_work, p_err) 
+                  CALL mpi_send (catnum, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err) 
+               
+                  imin = thisinfo%bsn_nswe(1,icat) 
+                  imax = thisinfo%bsn_nswe(2,icat) 
+                  jmin = thisinfo%bsn_nswe(3,icat) 
+                  jmax = thisinfo%bsn_nswe(4,icat) 
+               
+                  imin = max(imin-1, inorth)
+                  imax = min(imax+1, isouth)
+
+                  IF ((jwest == 1) .and. (jeast == mglb)) THEN
+                     jmin = jmin-1
+                     jmax = jmax+1
+                  ELSE
+                     IF (jmin /= jwest) jmin = jmin-1
+                     IF (jmax /= jeast) jmax = jmax+1
+                  ENDIF
+                  IF (jmin == 0)   jmin = mglb
+                  IF (jmax > mglb) jmax = 1
+
+                  np = imax - imin + 1
+                  mp = jmax - jmin + 1
+                  IF (mp < 0) mp = mp + mglb
+
+                  allocate (catch (np,mp))
+                  allocate (dir   (np,mp))
+                  allocate (hnd   (np,mp))
+                  allocate (elv   (np,mp))
+                  allocate (hunit (np,mp))
+
+                  CALL aggregate_data (imin, imax, jmin, jmax, np, mp, &
+                     icat = catch, dir = dir, hnd = hnd, elv = elv, hunit = hunit)
+
+                  mesg(1:3) = (/thisinfo%lake_id (icat), np, mp/)
+                  CALL mpi_send (mesg(1:3), 3, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (catch, np*mp, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (dir,   np*mp, MPI_INTEGER1, iwork, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (hnd,   np*mp, MPI_REAL4,    iwork, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (elv,   np*mp, MPI_REAL4,    iwork, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (hunit, np*mp, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
 
                   write(*,100) catnum, ntotalall
                   100 format('(S4) Catchment information, ID (', I10, '/', I10, ') in progress.') 
+                  
+                  deallocate (catch)
+                  deallocate (dir  )
+                  deallocate (hnd  )
+                  deallocate (elv  )
+                  deallocate (hunit)
 
                   icat = icat + 1
                ELSE
                   zero = 0
-                  CALL mpi_send (zero, 1, MPI_INTEGER, iwork, 2, p_comm_work, p_err) 
+                  CALL mpi_send (zero, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err) 
                   ndone = ndone + 1
                ENDIF
 
@@ -209,8 +233,10 @@ CONTAINS
 
             DO icat = 1, ntotalcat
                thisinfo%bsn_num_nbr(icat) = bsn_nbr(icat)%nnb 
-               thisinfo%bsn_idx_nbr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%nbr_index 
-               thisinfo%bsn_len_bdr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%lenborder 
+               IF (bsn_nbr(icat)%nnb > 0) THEN
+                  thisinfo%bsn_idx_nbr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%nbr_index 
+                  thisinfo%bsn_len_bdr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%lenborder 
+               ENDIF
             ENDDO
 
             DO icat = 1, ntotalcat
@@ -221,11 +247,11 @@ CONTAINS
             ENDDO
             deallocate (bsn_nbr)
 
-            CALL mpi_barrier (p_comm_work, p_err)
             IF (trim(storage_type) == 'block') THEN
-               CALL excute_data_task (t_flush_blocks)
+               CALL flush_blocks(.false.)
             ENDIF
-            CALL mpi_barrier (p_comm_work, p_err)
+
+            CALL mpi_barrier (p_comm_glb, p_err)
          
             IF (associated(thisinfo%next)) THEN
                thisinfo => thisinfo%next
@@ -235,73 +261,38 @@ CONTAINS
 
          ENDDO
 
-         deallocate (indxhu)
-         deallocate (areahu)
-         deallocate (nexthu)
-         deallocate (handhu)
-         deallocate (elvahu)
-         deallocate (plenhu)
-         deallocate (lfachu)
-
-         CALL excute_data_task (t_exit)
-
-      ELSEIF (p_is_data) THEN
-
-         CALL data_daemon ()
-
       ELSEIF (p_is_work) THEN
 
-         CALL mpi_bcast (numblocks, 1, MPI_INTEGER, p_master_address, p_comm_work, p_err)
+         CALL mpi_bcast (numblocks, 1, MPI_INTEGER, p_master_address, p_comm_glb, p_err)
 
          DO WHILE (numblocks > 0)
 
-            ! CALL sync_window ()
-
-            mesg(1:2) = (/p_iam_work, -1/)
-            CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
+            mesg(1:2) = (/p_iam_glb, -1/)
+            CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err) 
 
             DO WHILE (.true.)
 
-               CALL mpi_recv (catnum, 1, MPI_INTEGER, 0, 2, p_comm_work, p_stat, p_err)
+               CALL mpi_recv (catnum, 1, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_stat, p_err)
 
                IF (catnum == 0) EXIT
 
-               CALL mpi_recv (lakeid, 1, MPI_INTEGER, 0, 2, p_comm_work, p_stat, p_err)
+               CALL mpi_recv (mesg(1:3), 3, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_stat, p_err)
 
-               CALL mpi_recv (mesg(1:4), 4, MPI_INTEGER, 0, 2, p_comm_work, p_stat, p_err)
-               imin = mesg(1) 
-               imax = mesg(2) 
-               jmin = mesg(3) 
-               jmax = mesg(4) 
+               lakeid = mesg(1)
+               np     = mesg(2)
+               mp     = mesg(3)
 
-               imin = max(imin-1, inorth)
-               imax = min(imax+1, isouth)
-
-               jmin = jmin-1
-               jmax = jmax+1
-               IF (jwest == 0) THEN
-                  IF (jmin == 0) jmin = mglb
-                  IF (jmax > mglb) jmax = 1
-               ELSE
-                  IF (jmin == jwest-1) jmin = jwest
-                  IF (jmax == jeast+1) jmax = jeast
-               ENDIF
-
-               np = imax - imin + 1
-               mp = jmax - jmin + 1
-               IF (mp < 0) mp = mp + mglb
-
-               allocate (latitude (np))
-               allocate (longitude(mp))
                allocate (catch (np,mp))
                allocate (dir   (np,mp))
                allocate (hnd   (np,mp))
                allocate (elv   (np,mp))
                allocate (hunit (np,mp))
-
-               CALL aggregate_data (imin, imax, jmin, jmax, & 
-                  np, mp, longitude, latitude, &
-                  icat = catch, dir = dir, hnd = hnd, elv = elv, hunit = hunit)
+               
+               CALL mpi_recv (catch, np*mp, MPI_INTEGER,  p_master_address, 1, p_comm_glb, p_stat, p_err)
+               CALL mpi_recv (dir,   np*mp, MPI_INTEGER1, p_master_address, 1, p_comm_glb, p_stat, p_err)
+               CALL mpi_recv (hnd,   np*mp, MPI_REAL4,    p_master_address, 1, p_comm_glb, p_stat, p_err)
+               CALL mpi_recv (elv,   np*mp, MPI_REAL4,    p_master_address, 1, p_comm_glb, p_stat, p_err)
+               CALL mpi_recv (hunit, np*mp, MPI_INTEGER,  p_master_address, 1, p_comm_glb, p_stat, p_err)
 
                allocate (hmask (np,mp))
                hmask = (catch == catnum) 
@@ -452,10 +443,10 @@ CONTAINS
                CALL get_basin_neighbour (catnum, imin, jmin, np, mp, catch, &
                   nnb, nbindex, lenborder)
 
-               mesg(1:2) = (/p_iam_work, catnum/)
-               CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
+               mesg(1:2) = (/p_iam_glb, catnum/)
+               CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_glb, p_err) 
 
-               CALL mpi_send (nu, 1, MPI_INTEGER, 0, 1, p_comm_work, p_err) 
+               CALL mpi_send (nu, 1, MPI_INTEGER, 0, 1, p_comm_glb, p_err) 
 
                IF (lakeid <= 0) THEN
 
@@ -468,38 +459,36 @@ CONTAINS
                   allocate (datai (nusend))
 
                   datai(1:nusend) = pack( (/(i,i=0,maxnum)/), mask)
-                  CALL mpi_send (datai(1:nusend), nusend, MPI_INTEGER, 0, 1, p_comm_work, p_err) 
+                  CALL mpi_send (datai(1:nusend), nusend, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err) 
 
                   datar(1:nusend) = pack(areahu, mask)
-                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, 0, 1, p_comm_work, p_err) 
+                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
 
                   datai(1:nusend) = pack(nexthu, mask)
-                  CALL mpi_send (datai(1:nusend), nusend, MPI_INTEGER, 0, 1, p_comm_work, p_err) 
+                  CALL mpi_send (datai(1:nusend), nusend, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err) 
 
                   datar(1:nusend) = pack(handhu, mask)
-                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, 0, 1, p_comm_work, p_err) 
+                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
 
                   datar(1:nusend) = pack(elvahu, mask)
-                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, 0, 1, p_comm_work, p_err) 
+                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
 
                   datar(1:nusend) = pack(plenhu, mask)
-                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, 0, 1, p_comm_work, p_err) 
+                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
 
                   datar(1:nusend) = pack(lfachu, mask)
-                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, 0, 1, p_comm_work, p_err) 
+                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
 
                ENDIF
 
-               CALL mpi_send (elvacat, 1, MPI_REAL4, 0, 1, p_comm_work, p_err) 
+               CALL mpi_send (elvacat, 1, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
 
-               CALL mpi_send (nnb, 1, MPI_INTEGER, 0, 1, p_comm_work, p_err) 
+               CALL mpi_send (nnb, 1, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err) 
                IF (nnb > 0) THEN
-                  CALL mpi_send (nbindex  (1:nnb), nnb, MPI_INTEGER, 0, 1, p_comm_work, p_err) 
-                  CALL mpi_send (lenborder(1:nnb), nnb, MPI_REAL4  , 0, 1, p_comm_work, p_err) 
+                  CALL mpi_send (nbindex  (1:nnb), nnb, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (lenborder(1:nnb), nnb, MPI_REAL4  , p_master_address, 1, p_comm_glb, p_err) 
                ENDIF
 
-               IF (allocated (longitude)) deallocate (longitude)
-               IF (allocated (latitude )) deallocate (latitude )
                IF (allocated (catch)    ) deallocate (catch)
                IF (allocated (dir  )    ) deallocate (dir  )
                IF (allocated (hnd  )    ) deallocate (hnd  )
@@ -524,8 +513,7 @@ CONTAINS
 
             ENDDO
 
-            CALL mpi_barrier (p_comm_work, p_err)
-            CALL mpi_barrier (p_comm_work, p_err)
+            CALL mpi_barrier (p_comm_glb, p_err)
 
             numblocks = numblocks - 1
 

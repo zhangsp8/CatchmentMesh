@@ -208,7 +208,7 @@ CONTAINS
       real    (kind=4) :: upa_up(8), area, rlen, rlen_max
       integer (kind=4) :: nbranch, ibranch
 
-      integer (kind=4) :: ij_this(2), i, j, i_up, j_up, i_dn, j_dn, idir
+      integer (kind=4) :: ij_this(2), i, j, i_up, j_up, i_dn, j_dn, idir, ip
       integer (kind=1) :: dir_this
       integer (kind=4) :: iblk, jblk, iblk0, jblk0
 
@@ -232,19 +232,11 @@ CONTAINS
          IF (end_of_data) RETURN
       ENDIF
       
-      CALL mpi_bcast (binfo, 256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
-      
-      
       IF (p_is_master)  write(*,'(/3A/)') 'Step 1 ', trim(binfo), ': Finding all reach and lake outlets ...'
 
-      IF (p_is_data) THEN
 
-         CALL data_daemon ()
+      IF (p_is_master) THEN
 
-      ELSEIF (p_is_master) THEN
-
-         CALL sync_window ()
-         
          rlen_max = sqrt(catsize)
 
          allocate (river (3,1))
@@ -408,32 +400,21 @@ CONTAINS
             ENDDO
          ENDDO
 
-
-         head = 0
-         DO WHILE (head < nriv)
-
-            tail = head + 1
-            iblk = (river(1,tail)-1)/nbox + 1
-            jblk = (river(2,tail)-1)/mbox + 1
-
-            head = tail
-            DO WHILE (head < nriv)
-               iblk0 = (river(1,head+1)-1)/nbox + 1
-               jblk0 = (river(2,head+1)-1)/mbox + 1
-               IF ((iblk0 == iblk) .and. (jblk0 == jblk)) THEN
-                  head = head + 1
-               ELSE
-                  EXIT
-               ENDIF
-            ENDDO
-
-            CALL excute_data_task (t_update_river)
-            CALL mpi_send (iblk, 1, MPI_INTEGER4, p_data_address, t_update_river, p_comm_glb, p_err) 
-            CALL mpi_send (jblk, 1, MPI_INTEGER4, p_data_address, t_update_river, p_comm_glb, p_err) 
-            CALL mpi_send (head-tail+1, 1, MPI_INTEGER4, p_data_address, t_update_river, p_comm_glb, p_err) 
-            CALL mpi_send (river(:,tail:head), (head-tail+1)*3, MPI_INTEGER4, &
-               p_data_address, t_update_river, p_comm_glb, p_err) 
-
+         DO ip = 1, nriv
+            iblk = (river(1,ip)-1)/nbox + 1
+            jblk = (river(2,ip)-1)/mbox + 1
+         
+            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
+            
+            i = river(1,ip) - blks(iblk,jblk)%idsp
+            j = river(2,ip) - blks(iblk,jblk)%jdsp
+            IF ((blks(iblk,jblk)%icat (i,j) /= 0) &
+               .and. (blks(iblk,jblk)%icat (i,j) /= river(3,ip))) THEN
+               write(*,*) 'mismatch while update catnum', &
+                  blks(iblk,jblk)%icat(i,j), river(:,ip)
+               STOP
+            ENDIF
+            blks(iblk,jblk)%icat (i,j) = river(3,ip)
          ENDDO
 
          ! river length and elevations.
@@ -479,8 +460,6 @@ CONTAINS
          thisinfo%nrivpix = nriv
          allocate (thisinfo%riv_pix (3,nriv))
          thisinfo%riv_pix = river(:,1:nriv)
-
-         CALL excute_data_task (t_exit)
 
          IF (allocated(river)     )   deallocate (river)
          IF (allocated(rivermouth))   deallocate (rivermouth)

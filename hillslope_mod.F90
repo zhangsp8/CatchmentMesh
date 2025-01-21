@@ -19,10 +19,6 @@ CONTAINS
       integer (kind=4), intent(inout) :: maxhunum
 
       real    (kind=4) :: levsize
-
-      real    (kind=8), allocatable :: longitude(:)    
-      real    (kind=8), allocatable :: latitude (:)    
-
       integer (kind=4), allocatable :: catch (:,:)    
       integer (kind=1), allocatable :: dir   (:,:)    
       real    (kind=4), allocatable :: hnd   (:,:)
@@ -30,20 +26,11 @@ CONTAINS
       integer (kind=4), allocatable :: hunit (:,:)    
       logical, allocatable :: hmask (:,:)
 
-      integer (kind=4) :: icat
+      integer (kind=4) :: icat, jcat
       integer (kind=4) :: catnum, lakeid, imin, imax, jmin, jmax
-      integer (kind=4) :: bnds(6)
-      logical :: end_of_data
-
-      integer (kind=4) :: np, mp, dsize 
-      integer (kind=4) :: i, j, iblk, jblk, iblk1, jblk1
-      integer (kind=4) :: i0, i1, j0, j1, il0, il1, jl0, jl1
-      integer (kind=4) :: iwork, ndone
-      integer (kind=4) :: jlon
-      integer (kind=4) :: mesg(4), zero
-
-      integer (kind=4), allocatable :: hulist(:)
-      integer (kind=4) :: iloc
+      integer (kind=4) :: np, mp, ip, jp, i, j, iblk, jblk, jlon
+      integer (kind=4) :: iwork
+      integer (kind=4) :: mesg(5), zero
 
 
       ! Dividing catchment into units.
@@ -51,90 +38,127 @@ CONTAINS
 
          write(*,'(/3A/)') 'Step 3 ',trim(binfo),': Finding all hillslope units and lake elements ...'
 
-         icat = 1
-         ndone = 0
-
-         DO WHILE (.true.)
-
+         DO icat = 1, thisinfo%ntotalcat + p_nwork
+            
             CALL mpi_recv (mesg(1:2), 2, MPI_INTEGER, &
-               MPI_ANY_SOURCE, 0, p_comm_work, p_stat, p_err)
+               MPI_ANY_SOURCE, 0, p_comm_glb, p_stat, p_err)
 
-            iwork = mesg(1)
+            iwork  = mesg(1)
+            catnum = mesg(2)
+
+            IF (catnum > 0) THEN
+
+               jcat = catnum - thisinfo%icatdsp
+
+               imin = thisinfo%bsn_nswe(1,jcat) 
+               imax = thisinfo%bsn_nswe(2,jcat) 
+               jmin = thisinfo%bsn_nswe(3,jcat) 
+               jmax = thisinfo%bsn_nswe(4,jcat) 
+               np = imax - imin + 1
+               mp = jmax - jmin + 1
+               IF (mp < 0) mp = mp + mglb
+            
+               allocate (hunit (np,mp))
+
+               CALL mpi_recv (hunit, np*mp, MPI_INTEGER, iwork, 2, p_comm_glb, p_stat, p_err)
+
+               DO ip = 1, np
+                  DO jp = 1, mp
+                     iblk = (imin+ip-2)/nbox + 1
+                     jblk = mod(jmin+jp-2,mglb)/mbox + 1
+                     i = mod(imin-1+ip-1,nbox) + 1
+                     j = mod(jmin-1+jp-1,mbox) + 1
+                     
+                     IF (blks(iblk,jblk)%icat(i,j) == catnum) THEN
+
+                        blks(iblk,jblk)%hunit(i,j) = hunit(ip,jp)
+
+                        IF (thisinfo%lake_id(jcat) <= 0) THEN
+                           maxhunum = max(maxhunum, hunit(ip,jp)+1)
+                        ENDIF
+                     ENDIF
+                  ENDDO
+               ENDDO
+
+               deallocate (hunit)
+
+            ENDIF
 
             IF (icat <= thisinfo%ntotalcat) THEN
+               
+               imin = thisinfo%bsn_nswe(1,icat) 
+               imax = thisinfo%bsn_nswe(2,icat) 
+               jmin = thisinfo%bsn_nswe(3,icat) 
+               jmax = thisinfo%bsn_nswe(4,icat) 
+               np = imax - imin + 1
+               mp = jmax - jmin + 1
+               IF (mp < 0) mp = mp + mglb
 
+               allocate (catch (np,mp))
+               allocate (dir   (np,mp))
+               allocate (hnd   (np,mp))
+
+               CALL aggregate_data (imin, imax, jmin, jmax, np, mp, &
+                  icat = catch, dir = dir, hnd = hnd)
+               
                catnum = icat + thisinfo%icatdsp
-               CALL mpi_send (catnum, 1, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
-               CALL mpi_send (thisinfo%lake_id   (icat), 1, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
-               CALL mpi_send (thisinfo%bsn_bnds(:,icat), 4, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
+               CALL mpi_send (catnum, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err) 
+               
+               mesg(1:5) = (/thisinfo%lake_id(icat), imin, jmin, np, mp/)
+               CALL mpi_send (mesg(1:5), 5, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
+               CALL mpi_send (catch, np*mp, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
+               CALL mpi_send (dir,   np*mp, MPI_INTEGER1, iwork, 1, p_comm_glb, p_err) 
+               CALL mpi_send (hnd,   np*mp, MPI_REAL4,    iwork, 1, p_comm_glb, p_err) 
 
-               write(*,100) trim(binfo), catnum, thisinfo%bsn_bnds(:,icat), icat, thisinfo%ntotalcat
+               write(*,100) trim(binfo), catnum, thisinfo%bsn_nswe(:,icat), icat, thisinfo%ntotalcat
                100 format('(S3) Hillslopes and Lake Elements ',A,': ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
                   '(', I8, '/', I8, ') in progress.') 
 
-               icat = icat + 1
+               deallocate (catch)
+               deallocate (dir  )
+               deallocate (hnd  )
+
             ELSE
                zero = 0
-               CALL mpi_send (zero, 1, MPI_INTEGER, iwork, 1, p_comm_work, p_err) 
-               ndone = ndone + 1
+               CALL mpi_send (zero, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err) 
             ENDIF
 
-            maxhunum = max(mesg(2), maxhunum)
-
-            IF (ndone == p_nwork) EXIT
          ENDDO
-
-         CALL mpi_barrier (p_comm_work, p_err)
-         CALL excute_data_task (t_exit)
-
-      ELSEIF (p_is_data) THEN
-
-         CALL data_daemon ()
 
       ELSEIF (p_is_work) THEN
 
-         ! CALL sync_window ()
-
          levsize = catsize / nlev_max
 
-         mesg(1:2) = (/p_iam_work, 0/)
-         CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
+         mesg(1:2) = (/p_iam_glb, 0/)
+         CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err) 
 
          DO WHILE (.true.)
 
-            CALL mpi_recv (catnum, 1, MPI_INTEGER, 0, 1, p_comm_work, p_stat, p_err)
+            CALL mpi_recv (catnum, 1, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_stat, p_err)
 
             IF (catnum == 0) EXIT
 
-            CALL mpi_recv (lakeid,    1, MPI_INTEGER, 0, 1, p_comm_work, p_stat, p_err)
-            CALL mpi_recv (mesg(1:4), 4, MPI_INTEGER, 0, 1, p_comm_work, p_stat, p_err)
+            CALL mpi_recv (mesg(1:5), 5, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_stat, p_err)
 
-            imin = mesg(1) 
-            imax = mesg(2) 
-            jmin = mesg(3) 
-            jmax = mesg(4) 
+            lakeid = mesg(1)
+            imin   = mesg(2)
+            jmin   = mesg(3)
+            np     = mesg(4)
+            mp     = mesg(5)
 
-            np = imax - imin + 1
-            mp = jmax - jmin + 1
-            IF (mp < 0) mp = mp + mglb
-            dsize = np * mp
-
-            allocate (longitude(mp))
-            allocate (latitude (np))
             allocate (catch (np,mp))
             allocate (dir   (np,mp))
             allocate (hnd   (np,mp))
+            
+            CALL mpi_recv (catch, np*mp, MPI_INTEGER,  p_master_address, 1, p_comm_glb, p_stat, p_err)
+            CALL mpi_recv (dir,   np*mp, MPI_INTEGER1, p_master_address, 1, p_comm_glb, p_stat, p_err)
+            CALL mpi_recv (hnd,   np*mp, MPI_REAL4,    p_master_address, 1, p_comm_glb, p_stat, p_err)
 
-            CALL aggregate_data (imin, imax, jmin, jmax, & 
-               np, mp, longitude, latitude, &
-               icat = catch, dir = dir, hnd = hnd)
-
-            allocate (area (np,mp))
+            allocate (area  (np,mp))
             DO j = 1, mp
                DO i = 1, np
                   jlon = j + jmin - 1
                   IF (jlon > mglb) jlon = jlon - mglb
-
                   area (i,j) = get_area (i+imin-1,jlon)
                ENDDO
             ENDDO
@@ -152,49 +176,10 @@ CONTAINS
                ENDIF
             ENDIF
 
-            iblk = (imin-1)/nbox + 1
-            jblk = (jmin-1)/mbox + 1
-            DO WHILE (.true.)
-               CALL block_iterator (imin, imax, jmin, jmax, iblk, jblk, &
-                  i0, i1, j0, j1, il0, il1, jl0, jl1, &
-                  iblk1, jblk1, end_of_data)
-                  
-               bnds  = (/iblk,jblk,i0,i1,j0,j1/)
+            mesg(1:2) = (/p_iam_glb, catnum/)
+            CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err) 
+            CALL mpi_send (hunit, np*mp, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err) 
 
-               dsize = (j1-j0+1)*(i1-i0+1)
-
-               CALL excute_data_task (t_update_hunit)
-               CALL mpi_send (catnum, 1, MPI_INTEGER, p_data_address, t_update_hunit, p_comm_glb, p_err) 
-               CALL mpi_send (bnds,   6, MPI_INTEGER, p_data_address, t_update_hunit, p_comm_glb, p_err) 
-               CALL mpi_send (hunit(il0:il1,jl0:jl1), dsize, MPI_INTEGER, p_data_address, &
-                  t_update_hunit, p_comm_glb, p_err)
-
-               IF (end_of_data) THEN
-                  EXIT
-               ELSE
-                  iblk = iblk1; jblk = jblk1
-               ENDIF
-            ENDDO
-
-            maxhunum = 0
-            
-            IF (lakeid <= 0) THEN
-               allocate (hulist(np*mp))
-               DO j = 1, mp
-                  DO i = 1, np
-                     IF (catch(i,j) == catnum) THEN
-                        CALL insert_into_sorted_list1 (hunit(i,j), maxhunum, hulist, iloc)
-                     ENDIF
-                  ENDDO
-               ENDDO
-               deallocate(hulist)
-            ENDIF
-
-            mesg(1:2) = (/p_iam_work, maxhunum/)
-            CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
-
-            deallocate (longitude)
-            deallocate (latitude )
             deallocate (catch)
             deallocate (dir  )
             deallocate (hnd  )
@@ -204,9 +189,9 @@ CONTAINS
 
          ENDDO
 
-         CALL mpi_barrier (p_comm_work, p_err)
-
       ENDIF
+         
+      CALL mpi_barrier (p_comm_glb, p_err)
 
    END SUBROUTINE get_hillslope_hydrounits
 

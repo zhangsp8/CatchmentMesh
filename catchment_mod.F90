@@ -22,13 +22,10 @@ CONTAINS
 
       real (kind=4), intent(in) :: catsize
 
-      integer (kind=4) :: icatdsp, iproc, cdsp, iwork, mesg(2), isrc, nsend, nrecv, ndone
-      integer (kind=4) :: catnum, ncat, ncat_work, nexpd
-      integer (kind=4) :: icat, i, j, i_up, j_up, idir, iblk, jblk, iblk0, jblk0
+      integer (kind=4) :: catnum, ncat, icat, i, j, i_up, j_up, idir, iblk, jblk
       integer (kind=1) :: dir_this
       
-      integer (kind=4) :: nrivp, irivp, irivseg, tail, head
-      integer (kind=4), allocatable :: river (:,:)
+      integer (kind=4) :: irivp, irivseg, tail, head
 
       integer (kind=4) :: nplist, iplist, jplist, npall
       integer (kind=4), allocatable :: pixellist (:,:)
@@ -38,24 +35,18 @@ CONTAINS
 
       type(catinfo_typ), target  :: networkinfo
       type(catinfo_typ), pointer :: thislake, nextlake
-      integer (kind=4), allocatable :: cat_id   (:)
-      integer (kind=4), allocatable :: lake_id  (:)
-      integer (kind=4), allocatable :: bndinfo(:,:)
       
       integer (kind=4) :: south, north, west, east, cdthis
-      integer (kind=4), allocatable :: catdown(:)
       
       ! lake
       logical :: is_lake
       integer (kind=4) :: nshorecat, nc, ic, np, ip, jp
-      integer (kind=4) :: outlet(2), lakeid, nplake, iplake, icatlast, i_dn, j_dn, npshore
+      integer (kind=4) :: outlet(2), lakeid, nplake, iplake, i_dn, j_dn, npshore
       real    (kind=4) :: shorearea
       integer (kind=4), allocatable :: lakepixels(:,:), lakeindex (:)
       integer (kind=4), allocatable :: shoreline (:,:), shoreindex(:), thiscat(:,:) 
       real    (kind=4), allocatable :: upashore(:), hndshore(:)
 
-
-      CALL mpi_barrier (p_comm_glb, p_err)
 
       IF (p_is_master) THEN
 
@@ -63,111 +54,7 @@ CONTAINS
 
          ncat = thisinfo%nrivseg
 
-         CALL mpi_bcast (thisinfo%icatdsp, 1, MPI_INTEGER, 0, p_comm_work, p_err)
-
-         cdsp = 0
-         DO iproc = 1, p_nwork
-            ncat_work = ncat / p_nwork
-            IF (iproc <= mod(ncat,p_nwork)) THEN
-               ncat_work = ncat_work + 1
-            ENDIF
-
-            CALL mpi_send (ncat_work, 1, MPI_INTEGER4, iproc, iproc, p_comm_work, p_err) 
-
-            head = cdsp
-            IF (ncat_work > 0) THEN
-               irivseg = 0
-               DO WHILE (head < thisinfo%nrivpix)
-                  head = head + 1
-                  DO WHILE (head < thisinfo%nrivpix)
-                     IF (thisinfo%riv_pix(3,head+1) == thisinfo%riv_pix(3,head)) THEN
-                        head = head + 1
-                     ELSE
-                        EXIT
-                     ENDIF
-                  ENDDO
-
-                  irivseg = irivseg + 1
-                  IF (irivseg == ncat_work) EXIT
-               ENDDO
-
-               nsend = head - cdsp
-               CALL mpi_send (nsend, 1, MPI_INTEGER4, iproc, iproc, p_comm_work, p_err) 
-               CALL mpi_send (thisinfo%riv_pix(:,cdsp+1:head), nsend*3, MPI_INTEGER4, &
-                  iproc, iproc, p_comm_work, p_err) 
-            ENDIF
-
-            cdsp = head
-         ENDDO
-
-         ! for lake
-         ndone = 0
-         DO WHILE (.true.)
-            CALL mpi_recv (mesg, 2, MPI_INTEGER, MPI_ANY_SOURCE, 0, p_comm_work, p_stat, p_err)
-            iwork = mesg(1)
-            nexpd = mesg(2)
-            IF (nexpd > 0) THEN
-               CALL mpi_send (ncat, 1, MPI_INTEGER, iwork, 0, p_comm_work, p_err) 
-               ncat = ncat + nexpd
-            ELSE
-               ndone = ndone + 1
-               IF (ndone == p_nwork) EXIT
-            ENDIF
-         ENDDO
-
-         CALL mpi_barrier (p_comm_work, p_err)
-
-         thisinfo%ntotalcat = ncat
-         allocate (thisinfo%lake_id    (ncat))
-         allocate (thisinfo%bsn_bnds (4,ncat))
-
-         DO iproc = 1, p_nwork
-            CALL mpi_recv (nrecv, 1, MPI_INTEGER, iproc, 0, p_comm_work, p_stat, p_err)
-            IF (nrecv > 0) THEN
-               allocate (cat_id   (nrecv))
-               allocate (lake_id  (nrecv))
-               allocate (bndinfo(4,nrecv))
-
-               CALL mpi_recv (cat_id,  nrecv,   MPI_INTEGER, iproc, 1, p_comm_work, p_stat, p_err)
-               CALL mpi_recv (lake_id, nrecv,   MPI_INTEGER, iproc, 1, p_comm_work, p_stat, p_err)
-               CALL mpi_recv (bndinfo, 4*nrecv, MPI_INTEGER, iproc, 1, p_comm_work, p_stat, p_err)
-
-               cat_id = cat_id - thisinfo%icatdsp
-
-               DO icat = 1, nrecv
-                  thisinfo%lake_id (cat_id(icat))   = lake_id(icat)
-                  thisinfo%bsn_bnds(:,cat_id(icat)) = bndinfo(:,icat)
-               ENDDO
-
-               deallocate(cat_id)
-               deallocate(lake_id)
-               deallocate(bndinfo)
-            ENDIF
-         ENDDO
-
-         CALL excute_data_task (t_exit)
-
-      ENDIF
-
-      IF (p_is_data) THEN
-
-         CALL data_daemon ()
-
-      ENDIF
-
-      IF (p_is_work) THEN
-
-         CALL sync_window ()
-
-         CALL mpi_bcast (icatdsp, 1, MPI_INTEGER, 0, p_comm_work, p_err)
-
-         CALL mpi_recv (ncat, 1, MPI_INTEGER, 0, p_iam_work, p_comm_work, p_stat, p_err)
-
          IF (ncat > 0) THEN
-
-            CALL mpi_recv (nrivp, 1, MPI_INTEGER, 0, p_iam_work, p_comm_work, p_stat, p_err)
-            allocate (river (3,nrivp))
-            CALL mpi_recv (river, nrivp*3, MPI_INTEGER, 0, p_iam_work, p_comm_work, p_stat, p_err)
 
             allocate (pixellist (2,100000))
             allocate (lakepixels(2,100000))
@@ -184,18 +71,18 @@ CONTAINS
 
             irivseg = 0
             head = 0
-            DO WHILE (head < nrivp)
+            DO WHILE (head < thisinfo%nrivpix)
 
                irivseg = irivseg + 1
                head = head + 1
                
-               is_lake = (get_lake(river(1,head),river(2,head)) > 0)
+               is_lake = (get_lake(thisinfo%riv_pix(1,head),thisinfo%riv_pix(2,head)) > 0)
 
                IF (.not. is_lake) THEN
                
                   tail = head
-                  DO WHILE (head < nrivp)
-                     IF (river(3,head+1) == river(3,head)) THEN
+                  DO WHILE (head < thisinfo%nrivpix)
+                     IF (thisinfo%riv_pix(3,head+1) == thisinfo%riv_pix(3,head)) THEN
                         head = head + 1
                      ELSE
                         EXIT
@@ -205,8 +92,8 @@ CONTAINS
                   npall = 0
                   DO irivp = head, tail, -1
 
-                     i = river(1,irivp)
-                     j = river(2,irivp)
+                     i = thisinfo%riv_pix(1,irivp)
+                     j = thisinfo%riv_pix(2,irivp)
 
                      elv0 = get_elv(i,j)
 
@@ -235,7 +122,7 @@ CONTAINS
 
                      npall = npall + nplist
 
-                     catnum = river(3,head)
+                     catnum = thisinfo%riv_pix(3,head)
                      CALL update_catchment_pixels     (catnum, nplist, pixellist, elvdata)
                      CALL update_catchment_boundaries (nplist, pixellist, irivseg, networkinfo)
                      
@@ -244,16 +131,16 @@ CONTAINS
 
                   ENDDO
                      
-                  write(*,100) trim(binfo), p_iam_glb, networkinfo%cid(irivseg), networkinfo%nswe(:,irivseg), &
-                     irivseg, ncat, npall, head-tail+1
-                  100 format('(S2) Catchment ',A,': On', I4, ' ID ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
+                  write(*,100) trim(binfo), networkinfo%cid(irivseg), networkinfo%nswe(:,irivseg), &
+                     irivseg, thisinfo%nrivseg, npall, head-tail+1
+                  100 format('(S2) Catchment ',A,': ID ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
                      ' (', I5, '/', I5, ' done), ', I10, ' Pixels, ', I3, ' Rivers') 
 
                ELSE
                   ! lake
                   
                   ! 1. lake area.
-                  outlet = river(1:2,head)
+                  outlet = thisinfo%riv_pix(1:2,head)
 
                   lakeid = get_lake(outlet(1), outlet(2))
 
@@ -279,16 +166,16 @@ CONTAINS
                      iplake = iplake + 1
                   ENDDO                     
                      
-                  catnum = river(3,head)
+                  catnum = thisinfo%riv_pix(3,head)
                   CALL update_catchment_pixels     (catnum, nplake, lakepixels, elvdata)
                   CALL update_catchment_boundaries (nplake, lakepixels, irivseg, networkinfo)
                      
                   networkinfo%cid(irivseg) = catnum
                   networkinfo%lid(irivseg) = lakeid
                   
-                  write(*,101) trim(binfo), p_iam_glb, networkinfo%cid(irivseg), networkinfo%nswe(:,irivseg), &
-                     irivseg, ncat, nplake
-                  101 format('(S2) Lake      ',A,': On', I4, ' ID ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
+                  write(*,101) trim(binfo), networkinfo%cid(irivseg), networkinfo%nswe(:,irivseg), &
+                     irivseg, thisinfo%nrivseg, nplake
+                  101 format('(S2) Lake      ',A,': ID ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
                      ' (', I5, '/', I5, ' done), ', I10, ' Pixels') 
 
                   ! 2. catchments along shore lines.
@@ -383,11 +270,6 @@ CONTAINS
 
                   IF (nshorecat > 0) THEN
                   
-                     ! inquire catchment number displacement
-                     mesg = (/p_iam_work, nshorecat/)
-                     CALL mpi_send (mesg,     2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
-                     CALL mpi_recv (icatlast, 1, MPI_INTEGER, 0, 0, p_comm_work, p_stat, p_err)
-                     
                      allocate (thislake%next)
                      thislake => thislake%next
                      thislake%next => null()
@@ -440,21 +322,22 @@ CONTAINS
                            ENDDO                     
                         ENDDO
 
-                        catnum = icatdsp + icatlast + ic
-
+                        catnum = thisinfo%icatdsp + ncat + ic
                         CALL update_catchment_pixels     (catnum, nplist, pixellist, elvdata)
                         CALL update_catchment_boundaries (nplist, pixellist, ic, thislake)
 
                         thislake%cid(ic) = catnum
                         thislake%lid(ic) = -1
-
-                        write(*,102) trim(binfo), p_iam_glb, thislake%cid(ic), thislake%nswe(:,ic), ic, nshorecat, nplist
-                        102 format('(S2) LakeCat   ',A,': On', I4, ' ID ', I7, ' (',I6,',',I6,',',I6,',', &
+                     
+                        write(*,102) trim(binfo), thislake%cid(ic), thislake%nswe(:,ic), ic, nshorecat, nplist
+                        102 format('(S2) LakeCat   ',A,': ID ', I7, ' (',I6,',',I6,',',I6,',', &
                            I6,'),', ' (', I5, '/', I5, ' done), ', I10, ' Pixels') 
 
                         deallocate (thiscat)
 
                      ENDDO
+                        
+                     ncat = ncat + nshorecat
                            
                      deallocate (shoreline )
                      deallocate (shoreindex)
@@ -465,58 +348,34 @@ CONTAINS
 
             ENDDO
 
-            deallocate (river)
             deallocate (pixellist)
             deallocate (lakepixels)
             deallocate (elvdata)
 
-         ENDIF
 
-         mesg = (/p_iam_work, 0/)
-         CALL mpi_send (mesg, 2, MPI_INTEGER, 0, 0, p_comm_work, p_err) 
-         
-         CALL mpi_barrier (p_comm_work, p_err)
-
-         IF (ncat > 0) THEN
-            thislake => networkinfo%next
-            DO WHILE (associated(thislake))
-               ncat = ncat + size(thislake%cid)
-               thislake => thislake%next
-            ENDDO
-         ENDIF
-         
-         CALL mpi_send (ncat, 1, MPI_INTEGER4, 0, 0, p_comm_work, p_err) 
-
-         IF (ncat > 0) THEN
-           
-            allocate (cat_id    (ncat))
-            allocate (lake_id   (ncat))
-            allocate (bndinfo (4,ncat))
+            thisinfo%ntotalcat = ncat
+            allocate (thisinfo%bsn_index  (ncat))
+            allocate (thisinfo%lake_id    (ncat))
+            allocate (thisinfo%bsn_nswe (4,ncat))
+            
+            thisinfo%bsn_index(1:ncat) = (/(ic, ic = 1, ncat)/) + thisinfo%icatdsp
 
             nc = size(networkinfo%cid)
-           
-            cat_id   (1:nc) = networkinfo%cid
-            lake_id  (1:nc) = networkinfo%lid
-            bndinfo(:,1:nc) = networkinfo%nswe
+            thisinfo%lake_id   (1:nc) = networkinfo%lid
+            thisinfo%bsn_nswe(:,1:nc) = networkinfo%nswe
 
             ic = nc
             thislake => networkinfo%next
             DO WHILE (associated(thislake))
                nc = size(thislake%cid)
                
-               cat_id   (ic+1:ic+nc) = thislake%cid
-               lake_id  (ic+1:ic+nc) = thislake%lid
-               bndinfo(:,ic+1:ic+nc) = thislake%nswe
+               thisinfo%lake_id   (ic+1:ic+nc) = thislake%lid
+               thisinfo%bsn_nswe(:,ic+1:ic+nc) = thislake%nswe
 
                ic = ic + nc
                thislake => thislake%next
             ENDDO
 
-            CALL mpi_send (cat_id,  ncat,   MPI_INTEGER4, 0, 1, p_comm_work, p_err) 
-            CALL mpi_send (lake_id, ncat,   MPI_INTEGER4, 0, 1, p_comm_work, p_err) 
-            CALL mpi_send (bndinfo, 4*ncat, MPI_INTEGER4, 0, 1, p_comm_work, p_err) 
-
-         
             deallocate (networkinfo%cid )
             deallocate (networkinfo%lid )
             deallocate (networkinfo%nswe)
@@ -533,61 +392,17 @@ CONTAINS
                thislake => nextlake
             ENDDO
 
-         ENDIF
 
-         
-      ENDIF
-
-      CALL mpi_barrier (p_comm_glb, p_err)
-
-      IF (p_is_master) THEN
-
-         allocate (thisinfo%bsn_downstream(thisinfo%ntotalcat))
-
-         DO iproc = 1, p_nwork
-            CALL mpi_recv (nrecv, 1, MPI_INTEGER, iproc, 0, p_comm_work, p_stat, p_err)
-            IF (nrecv > 0) THEN
-               allocate(cat_id (ncat))
-               allocate(catdown(ncat))
-
-               CALL mpi_recv (cat_id,  nrecv, MPI_INTEGER, iproc, 1, p_comm_work, p_stat, p_err)
-               CALL mpi_recv (catdown, nrecv, MPI_INTEGER, iproc, 1, p_comm_work, p_stat, p_err)
-
-               cat_id = cat_id - thisinfo%icatdsp
-
-               DO icat = 1, nrecv
-                  thisinfo%bsn_downstream(cat_id(icat)) = catdown(icat)
-               ENDDO
-
-               deallocate(cat_id)
-               deallocate(catdown)
-            ENDIF
-         ENDDO
-         
-         CALL excute_data_task (t_exit)
-
-      ENDIF
-
-      IF (p_is_data) THEN
-         CALL data_daemon ()
-      ENDIF
-
-      IF (p_is_work) THEN 
-
-         CALL sync_window ()
-
-         IF (ncat > 0) THEN
-
-            allocate (catdown (ncat))
-            catdown(:) = -9999
+            allocate (thisinfo%bsn_downstream (ncat))
+            thisinfo%bsn_downstream(:) = -9999
 
             DO icat = 1, ncat
       
-               catnum = cat_id   (icat)
-               north  = bndinfo(1,icat)
-               south  = bndinfo(2,icat)
-               west   = bndinfo(3,icat)
-               east   = bndinfo(4,icat)
+               catnum = icat + thisinfo%icatdsp
+               north  = thisinfo%bsn_nswe(1,icat)
+               south  = thisinfo%bsn_nswe(2,icat)
+               west   = thisinfo%bsn_nswe(3,icat)
+               east   = thisinfo%bsn_nswe(4,icat)
 
                IF ((south-1)/nbox - (north-1)/nbox > 1) THEN
                   
@@ -607,19 +422,19 @@ CONTAINS
                               ENDIF
 
                               IF (cdthis /= catnum) THEN
-                                 IF (catdown(icat) /= -9999) THEN
-                                    IF (cdthis /= catdown(icat)) THEN
+                                 IF (thisinfo%bsn_downstream(icat) /= -9999) THEN
+                                    IF (cdthis /= thisinfo%bsn_downstream(icat)) THEN
                                        write(*,'(A,I7,A,I7,A,I7,A,I7,A)') &
                                           'Warning: more than ONE downstream catchment : ',  &
-                                          cat_id(icat), ',', lake_id(icat), '(', catdown(icat), '->', &
-                                          cdthis, ')'
+                                          catnum, ',', thisinfo%lake_id(icat), &
+                                          '(', thisinfo%bsn_downstream(icat), '->', cdthis, ')'
                                     ENDIF
                                  ELSE
-                                    catdown(icat) = cdthis
+                                    thisinfo%bsn_downstream(icat) = cdthis
                                  ENDIF
                               ENDIF
                            ELSE
-                              catdown(icat) = dir_this
+                              thisinfo%bsn_downstream(icat) = dir_this
                            ENDIF
                         ENDIF
 
@@ -649,19 +464,19 @@ CONTAINS
                               ENDIF
 
                               IF (cdthis /= catnum) THEN
-                                 IF (catdown(icat) /= -9999) THEN
-                                    IF (cdthis /= catdown(icat)) THEN
+                                 IF (thisinfo%bsn_downstream(icat) /= -9999) THEN
+                                    IF (cdthis /= thisinfo%bsn_downstream(icat)) THEN
                                        write(*,'(A,I7,A,I7,A,I7,A,I7,A)') &
                                           'Warning: more than ONE downstream catchment : ',  &
-                                          cat_id(icat), ',', lake_id(icat), '(', catdown(icat), '->', &
-                                          cdthis, ')'
+                                          catnum, ',', thisinfo%lake_id(icat), &
+                                          '(', thisinfo%bsn_downstream(icat), '->', cdthis, ')'
                                     ENDIF
                                  ELSE
-                                    catdown(icat) = cdthis
+                                    thisinfo%bsn_downstream(icat) = cdthis
                                  ENDIF
                               ENDIF
                            ELSE
-                              catdown(icat) = dir_this
+                              thisinfo%bsn_downstream(icat) = dir_this
                            ENDIF
                         ENDIF
                      ENDDO
@@ -675,33 +490,19 @@ CONTAINS
 
                ENDIF
                            
-               write(*,103) trim(binfo), p_iam_glb, cat_id(icat), catdown(icat)
-               103 format('(S2) Downstream ', A, ': On', I4, ' From ', I7, ' to ', I7)
+               write(*,103) trim(binfo), catnum, thisinfo%bsn_downstream(icat)
+               103 format('(S2) Downstream ', A, ': From ', I7, ' to ', I7)
             ENDDO
             
          ENDIF
-
-         CALL mpi_send (ncat, 1, MPI_INTEGER4, 0, 0, p_comm_work, p_err) 
-         IF (ncat > 0) THEN
-            CALL mpi_send (cat_id,  ncat, MPI_INTEGER4, 0, 1, p_comm_work, p_err) 
-            CALL mpi_send (catdown, ncat, MPI_INTEGER4, 0, 1, p_comm_work, p_err) 
-         ENDIF
-
-         IF (allocated(cat_id )) deallocate(cat_id )
-         IF (allocated(bndinfo)) deallocate(bndinfo)
-         IF (allocated(lake_id)) deallocate(lake_id)
-         IF (allocated(catdown)) deallocate(catdown)
-
+                  
       ENDIF
-
-      CALL mpi_barrier (p_comm_glb, p_err)
 
    END SUBROUTINE get_catchment 
 
 
    SUBROUTINE update_catchment_pixels (catnum, np, pixellist, elvdata)
 
-      USE task_mod
       IMPLICIT NONE
 
       integer (kind = 4), intent(in) :: catnum, np
@@ -709,57 +510,25 @@ CONTAINS
       real    (kind = 4), intent(in) :: elvdata  (:)
 
       ! Local
-      integer :: ip, jp, iblk, jblk, iblk0, jblk0
-      integer, allocatable :: rmark (:)
-
-      integer :: scnt, idata
-      integer (kind = 4), allocatable :: ibuf (:,:)
-      real    (kind = 4), allocatable :: rbuf (:)
-
-      allocate (rmark (np))
-      rmark = 0
+      integer :: ip, iblk, jblk, i, j
 
       DO ip = 1, np
-         IF (rmark(ip) == 0) THEN
-            rmark(ip) = ip
-            iblk = (pixellist(1,ip)-1)/nbox + 1
-            jblk = (pixellist(2,ip)-1)/mbox + 1
-            DO jp = ip+1, np
-               iblk0 = (pixellist(1,jp)-1)/nbox + 1
-               jblk0 = (pixellist(2,jp)-1)/mbox + 1
-               IF ((iblk0 == iblk) .and. (jblk0 == jblk)) THEN
-                  rmark(jp) = ip
-               ENDIF
-            ENDDO
+         iblk = (pixellist(1,ip)-1)/nbox + 1
+         jblk = (pixellist(2,ip)-1)/mbox + 1
+         
+         IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
 
-            scnt = count(rmark(ip:np) == ip)
-            allocate (ibuf (2,scnt))
-            allocate (rbuf (scnt))
-
-            scnt = 0
-            DO jp = ip, np
-               IF (rmark(jp) == ip) THEN
-                  scnt = scnt + 1
-                  ibuf(:,scnt) = pixellist(:,jp)
-                  rbuf(scnt) = elvdata(jp)
-               ENDIF
-            ENDDO
-
-            CALL excute_data_task (t_update_icatch)
-            CALL mpi_send (scnt,   1, MPI_INTEGER4, p_data_address, t_update_icatch, p_comm_glb, p_err) 
-            CALL mpi_send (iblk,   1, MPI_INTEGER4, p_data_address, t_update_icatch, p_comm_glb, p_err) 
-            CALL mpi_send (jblk,   1, MPI_INTEGER4, p_data_address, t_update_icatch, p_comm_glb, p_err) 
-            CALL mpi_send (catnum, 1, MPI_INTEGER4, p_data_address, t_update_icatch, p_comm_glb, p_err) 
-
-            CALL mpi_send (ibuf, scnt*2, MPI_INTEGER, p_data_address, t_update_icatch, p_comm_glb, p_err) 
-            CALL mpi_send (rbuf, scnt,   MPI_REAL4,   p_data_address, t_update_icatch, p_comm_glb, p_err) 
-
-            deallocate (ibuf)
-            deallocate (rbuf)
+         i = pixellist(1,ip) - blks(iblk,jblk)%idsp
+         j = pixellist(2,ip) - blks(iblk,jblk)%jdsp
+         IF ((blks(iblk,jblk)%icat (i,j) /= 0) &
+            .and. (blks(iblk,jblk)%icat (i,j) /= catnum)) THEN
+            write(*,*) 'mismatch while update catnum', &
+               blks(iblk,jblk)%icat(i,j), catnum, pixellist(:,ip)
+            STOP
          ENDIF
+         blks(iblk,jblk)%icat (i,j) = catnum
+         blks(iblk,jblk)%hnd  (i,j) = elvdata(ip)
       ENDDO
-
-      deallocate (rmark)
 
    END SUBROUTINE update_catchment_pixels
 
@@ -791,7 +560,6 @@ CONTAINS
          nnb, nbindex, lenborder)
 
       USE hydro_data_mod
-      USE task_mod
 
       IMPLICIT NONE
 

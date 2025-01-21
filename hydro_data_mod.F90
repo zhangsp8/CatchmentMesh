@@ -48,7 +48,6 @@ MODULE hydro_data_mod
    real (kind=4) :: dlat(nglb)
    real (kind=4) :: dlon(nglb)
    
-   type (block_typ), PRIVATE :: win(2,2)
 
    type info_typ
 
@@ -72,7 +71,8 @@ MODULE hydro_data_mod
       ! basin information
       integer (kind=4) :: icatdsp
       integer (kind=4) :: ntotalcat
-      integer (kind=4), allocatable :: bsn_bnds     (:,:) 
+      integer (kind=4), allocatable :: bsn_index      (:) 
+      integer (kind=4), allocatable :: bsn_nswe     (:,:) 
       integer (kind=4), allocatable :: bsn_num_hru    (:)    
       integer (kind=4), allocatable :: bsn_downstream (:) 
       integer (kind=4), allocatable :: bsn_num_nbr    (:)    
@@ -90,26 +90,6 @@ MODULE hydro_data_mod
    type(info_typ), target  :: allinfo
    type(info_typ), pointer :: thisinfo
 
-   ! ------ task id ------
-   integer (kind=4), parameter :: t_exit = 0
-   integer (kind=4), parameter :: t_check_data_exist = 1
-   integer (kind=4), parameter :: t_inquire_gridinfo = 2
-   integer (kind=4), parameter :: t_inquire_dir      = 10
-   integer (kind=4), parameter :: t_inquire_upa      = 11
-   integer (kind=4), parameter :: t_inquire_elv      = 12
-   integer (kind=4), parameter :: t_inquire_icat     = 13
-   integer (kind=4), parameter :: t_inquire_wth      = 14
-   integer (kind=4), parameter :: t_inquire_hnd      = 15
-   integer (kind=4), parameter :: t_inquire_hunit    = 16
-   
-   integer (kind=4), parameter :: t_inquire_lake     = 17
-   
-   integer (kind=4), parameter :: t_update_river     = 21
-   integer (kind=4), parameter :: t_update_icatch    = 22
-   integer (kind=4), parameter :: t_update_hunit     = 23 
-   
-   integer (kind=4), parameter :: t_flush_blocks     = 24 
-   
 CONTAINS
 
    !----------------------------------------
@@ -149,10 +129,7 @@ CONTAINS
       real (kind=4), intent(in) :: west,  east    ! -180 to 180
       real (kind=4), intent(in) :: north, south   ! -90 to 90
 
-      integer (kind=4) :: iblk, jblk, iwin, jwin
-
-      character(len=256) :: filename
-      logical :: fexist
+      integer (kind=4) :: iblk, jblk
 
       IF (p_is_master) THEN
          
@@ -176,20 +153,15 @@ CONTAINS
          write(*,'(A,4F8.2)') 'Step 0 : Region (n,s,w,e): ', north, south, west, east
          write(*,'(A,4I8)')   'Step 0 : Iregion(n,s,w,e): ', inorth, isouth, jwest, jeast
 
-      ENDIF
-
-      CALL mpi_bcast (inorth, 1, MPI_INTEGER, 0, p_comm_glb, p_err) 
-      CALL mpi_bcast (isouth, 1, MPI_INTEGER, 0, p_comm_glb, p_err) 
-      CALL mpi_bcast (jwest,  1, MPI_INTEGER, 0, p_comm_glb, p_err) 
-      CALL mpi_bcast (jeast,  1, MPI_INTEGER, 0, p_comm_glb, p_err) 
-      
-      DO jblk = 1, mblock
-         DO iblk = 1, nblock
-            blks(iblk,jblk)%idsp = (iblk-1)*nbox 
-            blks(iblk,jblk)%jdsp = (jblk-1)*mbox 
-            blks(iblk,jblk)%ready = .false.
+         DO jblk = 1, mblock
+            DO iblk = 1, nblock
+               blks(iblk,jblk)%idsp = (iblk-1)*nbox 
+               blks(iblk,jblk)%jdsp = (jblk-1)*mbox 
+               blks(iblk,jblk)%ready = .false.
+            ENDDO
          ENDDO
-      ENDDO
+
+      ENDIF
 
    END SUBROUTINE get_region
 
@@ -356,7 +328,7 @@ CONTAINS
                      'latitude', 'longitude', compress = 1)
                   CALL ncio_write_serial (filename, 'ihydrounit2d', blks(iblk,jblk)%hunit, &
                      'latitude', 'longitude', compress = 1)
-
+                     
                ENDIF
 
                deallocate (blks(iblk,jblk)%lat)
@@ -571,254 +543,6 @@ CONTAINS
 
    END SUBROUTINE block_iterator
       
-
-   !---------------------------------------------
-   SUBROUTINE win_inquire_data (iwin, jwin, iblk, jblk)
-
-      USE task_mod
-      IMPLICIT NONE
-
-      integer (kind=4), intent(in) :: iwin, jwin
-      integer (kind=4), intent(in) :: iblk, jblk
-
-      integer (kind=4) :: bnds(6)
-
-      win(iwin,jwin)%idsp = (iblk-1) * nbox
-      win(iwin,jwin)%jdsp = (jblk-1) * mbox
-
-      bnds = (/iblk,jblk,1,nbox,1,mbox/)
-
-      CALL excute_data_task(t_inquire_dir)
-      CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_dir, p_comm_glb, p_err) 
-      CALL mpi_recv (win(iwin,jwin)%dir, nbox*mbox, MPI_INTEGER1, p_data_address, t_inquire_dir, &
-         p_comm_glb, p_stat, p_err)
-
-      CALL excute_data_task(t_inquire_upa)
-      CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_upa, p_comm_glb, p_err) 
-      CALL mpi_recv (win(iwin,jwin)%upa, nbox*mbox, MPI_REAL4, p_data_address, t_inquire_upa, &
-         p_comm_glb, p_stat, p_err)
-
-      CALL excute_data_task(t_inquire_icat)
-      CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_icat, p_comm_glb, p_err) 
-      CALL mpi_recv (win(iwin,jwin)%icat, nbox*mbox, MPI_INTEGER4, p_data_address, t_inquire_icat, &
-         p_comm_glb, p_stat, p_err)
-
-      CALL excute_data_task(t_inquire_elv)
-      CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_elv, p_comm_glb, p_err) 
-      CALL mpi_recv (win(iwin,jwin)%elv, nbox*mbox, MPI_REAL4, p_data_address, t_inquire_elv, &
-         p_comm_glb, p_stat, p_err)
-
-      CALL excute_data_task(t_inquire_wth)
-      CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_wth, p_comm_glb, p_err) 
-      CALL mpi_recv (win(iwin,jwin)%wth, nbox*mbox, MPI_REAL4, p_data_address, t_inquire_wth, &
-         p_comm_glb, p_stat, p_err)
-
-      CALL excute_data_task(t_inquire_lake)
-      CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_lake, p_comm_glb, p_err) 
-      CALL mpi_recv (win(iwin,jwin)%lake, nbox*mbox, MPI_INTEGER4, p_data_address, t_inquire_lake, &
-         p_comm_glb, p_stat, p_err)
-
-   END SUBROUTINE win_inquire_data 
-
-   !---------------------------------------------
-   SUBROUTINE init_window ()
-
-      USE task_mod
-      IMPLICIT NONE
-
-      integer (kind=4) :: i, j
-
-      IF (.not. p_is_data) THEN
-         DO j = 1, 2
-            DO i = 1, 2
-               win(i,j)%idsp = -nbox
-               win(i,j)%jdsp = -mbox
-
-               allocate (win(i,j)%dir  (nbox,mbox))
-               allocate (win(i,j)%upa  (nbox,mbox))
-               allocate (win(i,j)%icat (nbox,mbox))
-               allocate (win(i,j)%elv  (nbox,mbox))
-               allocate (win(i,j)%wth  (nbox,mbox))
-               allocate (win(i,j)%lake (nbox,mbox))
-            ENDDO
-         ENDDO
-      ENDIF
-
-   END SUBROUTINE init_window
-
-   !---------------------------------------------
-   SUBROUTINE sync_window ()
-      
-      IMPLICIT NONE
-
-      integer (kind=4) :: i, j, iblk, jblk
-
-      DO j = 1, 2
-         DO i = 1, 2
-            IF ((win(i,j)%idsp /= -nbox) .and. (win(i,j)%jdsp /= -mbox)) THEN
-               iblk = win(i,j)%idsp/nbox + 1 
-               jblk = win(i,j)%jdsp/mbox + 1
-               CALL win_inquire_data(i,j,iblk,jblk)
-            ENDIF
-         ENDDO
-      ENDDO
-
-   END SUBROUTINE sync_window
-
-   !---------------------------------------------
-   SUBROUTINE free_window ()
-
-      IMPLICIT NONE
-
-      integer (kind=4) :: i, j
-
-      DO j = 1, 2
-         DO i = 1, 2
-            IF (allocated(win(i,j)%dir ))  deallocate (win(i,j)%dir )
-            IF (allocated(win(i,j)%upa ))  deallocate (win(i,j)%upa )
-            IF (allocated(win(i,j)%icat))  deallocate (win(i,j)%icat)
-            IF (allocated(win(i,j)%elv ))  deallocate (win(i,j)%elv )
-            IF (allocated(win(i,j)%wth ))  deallocate (win(i,j)%wth )
-            IF (allocated(win(i,j)%lake))  deallocate (win(i,j)%lake)
-         ENDDO
-      ENDDO
-
-   END SUBROUTINE free_window
-
-   !------------------------------------------------
-   SUBROUTINE copy_block_in_window (block_from, block_to)
-
-      IMPLICIT NONE
-      type (block_typ), intent(in)    :: block_from
-      type (block_typ), intent(inout) :: block_to
-
-      block_to%idsp = block_from%idsp
-      block_to%jdsp = block_from%jdsp
-
-      IF ((block_from%idsp /= -nbox) .and. (block_from%jdsp /= -mbox)) THEN
-         block_to%dir  = block_from%dir
-         block_to%upa  = block_from%upa
-         block_to%icat = block_from%icat
-         block_to%elv  = block_from%elv
-         block_to%wth  = block_from%wth
-         block_to%lake = block_from%lake
-      ENDIF
-      
-   END SUBROUTINE copy_block_in_window 
-
-   !---------------------------------------------
-   SUBROUTINE get_win_ij (i, j, iwin, jwin)
-
-      IMPLICIT NONE
-
-      integer (kind=4), intent(in)    :: i, j
-      integer (kind=4), intent(out)   :: iwin, jwin
-
-      integer (kind=4) :: iblk, jblk
-      
-      IF (i == win(1,1)%idsp) THEN
-         CALL copy_block_in_window (win(1,1), win(2,1))
-         CALL copy_block_in_window (win(1,2), win(2,2))
-
-         iblk = i/nbox
-         jblk = win(1,1)%jdsp/mbox + 1
-         CALL win_inquire_data (1, 1, iblk, jblk)
-
-         win(1,2)%idsp = -nbox
-         win(1,2)%jdsp = -mbox
-
-         iwin = 1
-      ELSEIF ((i > win(1,1)%idsp) .and. (i <= win(1,1)%idsp+nbox)) THEN
-         iwin = 1
-      ELSEIF ((i > win(1,1)%idsp+nbox) .and. (i <= win(1,1)%idsp+2*nbox)) THEN
-         iwin = 2
-      ELSEIF (i == win(1,1)%idsp+2*nbox+1) THEN
-         IF ((win(2,1)%idsp == -nbox) .and. (win(2,1)%jdsp == -mbox)) THEN
-            iblk = win(1,1)%idsp/nbox + 2
-            jblk = win(1,1)%jdsp/mbox + 1
-            CALL win_inquire_data (1, 1, iblk, jblk)
-         ELSE
-            CALL copy_block_in_window (win(2,1), win(1,1))
-         ENDIF
-         CALL copy_block_in_window (win(2,2), win(1,2))
-         
-         iwin = 2
-         win(2,1)%idsp = -nbox;   win(2,1)%jdsp = -mbox
-         win(2,2)%idsp = -nbox;   win(2,2)%jdsp = -mbox
-      ELSE
-         DO jwin = 1, 2
-            DO iwin = 1, 2
-               win(iwin,jwin)%idsp = -nbox
-               win(iwin,jwin)%jdsp = -mbox
-            ENDDO
-         ENDDO
-
-         iblk = (i-1)/nbox + 1
-         jblk = (j-1)/mbox + 1
-         iwin = 1
-         jwin = 1
-         CALL win_inquire_data (iwin, jwin, iblk, jblk)
-      ENDIF
-
-      IF ((j == win(1,1)%jdsp) .or. ((win(1,1)%jdsp == 0) .and. (j == mglb))) THEN
-         CALL copy_block_in_window (win(1,1), win(1,2))
-         CALL copy_block_in_window (win(2,1), win(2,2))
-
-         iblk = win(1,1)%idsp/nbox + 1
-         jblk = j/mbox
-         CALL win_inquire_data (1, 1, iblk, jblk)
-
-         win(2,1)%idsp = -nbox
-         win(2,1)%jdsp = -mbox
-
-         jwin = 1
-      ELSEIF ((j > win(1,1)%jdsp) .and. (j <= win(1,1)%jdsp+mbox)) THEN
-         jwin = 1
-      ELSEIF (((j > win(1,1)%jdsp+mbox) .and. (j <= win(1,1)%jdsp+2*mbox)) &
-            .or. ((win(1,1)%jdsp+mbox == mglb) .and. (j <= mbox))) THEN
-         jwin = 2
-      ELSEIF (j == mod(win(1,1)%jdsp+2*mbox+1, mglb)) THEN
-         IF ((win(1,2)%idsp == -nbox) .and. (win(1,2)%jdsp == -mbox)) THEN
-            iblk = win(1,1)%idsp/nbox + 1
-            jblk = win(1,1)%jdsp/mbox + 2 
-            IF (jblk > mblock) jblk = jblk - mblock
-            CALL win_inquire_data (1, 1, iblk, jblk)
-         ELSE
-            CALL copy_block_in_window (win(1,2), win(1,1))
-         ENDIF
-         CALL copy_block_in_window (win(2,2), win(2,1))
-         
-         jwin = 2
-         win(1,2)%idsp = -nbox;   win(1,2)%jdsp = -mbox
-         win(2,2)%idsp = -nbox;   win(2,2)%jdsp = -mbox
-      ELSE
-         DO jwin = 1, 2
-            DO iwin = 1, 2
-               win(iwin,jwin)%idsp = -nbox
-               win(iwin,jwin)%jdsp = -mbox
-            ENDDO
-         ENDDO
-
-         iblk = (i-1)/nbox + 1
-         jblk = (j-1)/mbox + 1
-         iwin = 1
-         jwin = 1
-         CALL win_inquire_data (iwin, jwin, iblk, jblk)
-      ENDIF
-
-      IF ((win(iwin,jwin)%idsp == -nbox) .and. (win(iwin,jwin)%jdsp == -mbox)) THEN
-         iblk = win(1,1)%idsp/nbox + iwin
-         jblk = win(1,1)%jdsp/mbox + jwin
-         IF (jblk > mblock) THEN
-            jblk = jblk - mblock
-         ENDIF
-
-         CALL win_inquire_data (iwin, jwin, iblk, jblk)
-      ENDIF
-
-   END SUBROUTINE get_win_ij
-
-
    !----------------------------------------------
    integer(kind=1) FUNCTION get_dir (i, j)
 
@@ -826,14 +550,16 @@ CONTAINS
 
       integer (kind=4), intent(in) :: i, j
 
-      integer (kind=4) :: iwin, jwin
+      integer (kind=4) :: iblk, jblk
 
-      CALL get_win_ij (i, j, iwin, jwin)
+      iblk = (i - 1)/nbox + 1
+      jblk = (j - 1)/mbox + 1
+         
+      IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
 
-      get_dir = win(iwin,jwin)%dir (i-win(iwin,jwin)%idsp, j-win(iwin,jwin)%jdsp)
+      get_dir = blks(iblk,jblk)%dir (i-blks(iblk,jblk)%idsp, j-blks(iblk,jblk)%jdsp)
 
    END FUNCTION get_dir 
-      
 
    !----------------------------------------------
    real(kind=4) FUNCTION get_upa (i, j)
@@ -842,11 +568,14 @@ CONTAINS
 
       integer (kind=4), intent(in) :: i, j
 
-      integer (kind=4) :: iwin, jwin
+      integer (kind=4) :: iblk, jblk
 
-      CALL get_win_ij (i, j, iwin, jwin)
+      iblk = (i - 1)/nbox + 1
+      jblk = (j - 1)/mbox + 1
 
-      get_upa = win(iwin,jwin)%upa (i-win(iwin,jwin)%idsp, j-win(iwin,jwin)%jdsp)
+      IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
+
+      get_upa = blks(iblk,jblk)%upa (i-blks(iblk,jblk)%idsp, j-blks(iblk,jblk)%jdsp)
 
    END FUNCTION get_upa
 
@@ -857,11 +586,14 @@ CONTAINS
 
       integer (kind=4), intent(in) :: i, j
 
-      integer (kind=4) :: iwin, jwin
+      integer (kind=4) :: iblk, jblk
 
-      CALL get_win_ij (i, j, iwin, jwin)
+      iblk = (i - 1)/nbox + 1
+      jblk = (j - 1)/mbox + 1
 
-      get_elv = win(iwin,jwin)%elv (i-win(iwin,jwin)%idsp, j-win(iwin,jwin)%jdsp)
+      IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
+
+      get_elv = blks(iblk,jblk)%elv (i-blks(iblk,jblk)%idsp, j-blks(iblk,jblk)%jdsp)
 
    END FUNCTION get_elv
 
@@ -872,11 +604,14 @@ CONTAINS
 
       integer (kind=4), intent(in) :: i, j
 
-      integer (kind=4) :: iwin, jwin
+      integer (kind=4) :: iblk, jblk
 
-      CALL get_win_ij (i, j, iwin, jwin)
+      iblk = (i - 1)/nbox + 1
+      jblk = (j - 1)/mbox + 1
       
-      get_icat = win(iwin,jwin)%icat (i-win(iwin,jwin)%idsp, j-win(iwin,jwin)%jdsp)
+      IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
+
+      get_icat = blks(iblk,jblk)%icat (i-blks(iblk,jblk)%idsp, j-blks(iblk,jblk)%jdsp)
 
    END FUNCTION get_icat
 
@@ -887,11 +622,14 @@ CONTAINS
 
       integer (kind=4), intent(in) :: i, j
 
-      integer (kind=4) :: iwin, jwin
+      integer (kind=4) :: iblk, jblk
 
-      CALL get_win_ij (i, j, iwin, jwin)
+      iblk = (i - 1)/nbox + 1
+      jblk = (j - 1)/mbox + 1
 
-      get_wth = win(iwin,jwin)%wth (i-win(iwin,jwin)%idsp, j-win(iwin,jwin)%jdsp)
+      IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
+
+      get_wth = blks(iblk,jblk)%wth (i-blks(iblk,jblk)%idsp, j-blks(iblk,jblk)%jdsp)
 
    END FUNCTION get_wth
 
@@ -902,11 +640,14 @@ CONTAINS
 
       integer (kind=4), intent(in) :: i, j
 
-      integer (kind=4) :: iwin, jwin
+      integer (kind=4) :: iblk, jblk
 
-      CALL get_win_ij (i, j, iwin, jwin)
+      iblk = (i - 1)/nbox + 1
+      jblk = (j - 1)/mbox + 1
 
-      get_lake = win(iwin,jwin)%lake (i-win(iwin,jwin)%idsp, j-win(iwin,jwin)%jdsp)
+      IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
+
+      get_lake = blks(iblk,jblk)%lake (i-blks(iblk,jblk)%idsp, j-blks(iblk,jblk)%jdsp)
 
    END FUNCTION get_lake
 
@@ -948,19 +689,17 @@ CONTAINS
       integer (kind=4), intent(in) :: imin, imax, jmin, jmax
          
       integer (kind=4), intent(in) :: np, mp
-      real    (kind=8), intent(inout) :: longitude(mp)
-      real    (kind=8), intent(inout) :: latitude (np)
 
+      real    (kind=8), intent(inout), optional :: longitude(mp)
+      real    (kind=8), intent(inout), optional :: latitude (np)
       integer (kind=4), intent(inout), optional :: icat  (np,mp)    
       integer (kind=1), intent(inout), optional :: dir   (np,mp)    
       real    (kind=4), intent(inout), optional :: hnd   (np,mp)
       real    (kind=4), intent(inout), optional :: elv   (np,mp)
       integer (kind=4), intent(inout), optional :: hunit (np,mp)    
    
-      integer (kind=4) :: dsize
       integer (kind=4) :: iblk, jblk, iblk1, jblk1
       integer (kind=4) :: i0, i1, j0, j1, il0, il1, jl0, jl1
-      integer (kind=4) :: bnds(6)
       logical :: end_of_data
             
       IF (present(icat)) THEN
@@ -975,50 +714,16 @@ CONTAINS
             i0, i1, j0, j1, il0, il1, jl0, jl1, &
             iblk1, jblk1, end_of_data)
 
-         bnds  = (/iblk,jblk,i0,i1,j0,j1/)
-         dsize = (j1-j0+1)*(i1-i0+1)
+         IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
 
-         CALL excute_data_task (t_inquire_gridinfo)
-         CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_gridinfo, p_comm_glb, p_err) 
-         CALL mpi_recv (longitude(jl0:jl1), jl1-jl0+1, MPI_DOUBLE, p_data_address, &
-            t_inquire_gridinfo, p_comm_glb, p_stat, p_err)
-         CALL mpi_recv (latitude (il0:il1), il1-il0+1, MPI_DOUBLE, p_data_address, &
-            t_inquire_gridinfo, p_comm_glb, p_stat, p_err)
-
-         IF (present(icat)) THEN
-            CALL excute_data_task (t_inquire_icat)
-            CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_icat, p_comm_glb, p_err) 
-            CALL mpi_recv (icat(il0:il1,jl0:jl1), dsize, MPI_INTEGER, p_data_address, &
-               t_inquire_icat, p_comm_glb, p_stat, p_err)
-         ENDIF
-
-         IF (present(dir)) THEN
-            CALL excute_data_task (t_inquire_dir)
-            CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_dir, p_comm_glb, p_err) 
-            CALL mpi_recv (dir(il0:il1,jl0:jl1), dsize, MPI_INTEGER1, p_data_address, &
-               t_inquire_dir, p_comm_glb, p_stat, p_err)
-         ENDIF
-
-         IF (present(hnd)) THEN
-            CALL excute_data_task (t_inquire_hnd)
-            CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_hnd, p_comm_glb, p_err) 
-            CALL mpi_recv (hnd(il0:il1,jl0:jl1), dsize, MPI_REAL4, p_data_address, &
-               t_inquire_hnd, p_comm_glb, p_stat, p_err)
-         ENDIF
-
-         IF (present(elv)) THEN
-            CALL excute_data_task (t_inquire_elv)
-            CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_elv, p_comm_glb, p_err) 
-            CALL mpi_recv (elv(il0:il1,jl0:jl1), dsize, MPI_REAL4, p_data_address, &
-               t_inquire_elv, p_comm_glb, p_stat, p_err)
-         ENDIF
-
-         IF (present(hunit)) THEN
-            CALL excute_data_task (t_inquire_hunit)
-            CALL mpi_send (bnds, 6, MPI_INTEGER, p_data_address, t_inquire_hunit, p_comm_glb, p_err) 
-            CALL mpi_recv (hunit(il0:il1,jl0:jl1), dsize, MPI_INTEGER, p_data_address, &
-               t_inquire_hunit, p_comm_glb, p_stat, p_err)
-         ENDIF
+         IF (present(longitude))  longitude(jl0:jl1) = blks(iblk,jblk)%lon(j0:j1)
+         IF (present(latitude ))  latitude (il0:il1) = blks(iblk,jblk)%lat(i0:i1)
+         
+         IF (present(icat))  icat (il0:il1,jl0:jl1) = blks(iblk,jblk)%icat (i0:i1,j0:j1)
+         IF (present(dir))   dir  (il0:il1,jl0:jl1) = blks(iblk,jblk)%dir  (i0:i1,j0:j1)
+         IF (present(hnd))   hnd  (il0:il1,jl0:jl1) = blks(iblk,jblk)%hnd  (i0:i1,j0:j1)
+         IF (present(elv))   elv  (il0:il1,jl0:jl1) = blks(iblk,jblk)%elv  (i0:i1,j0:j1)
+         IF (present(hunit)) hunit(il0:il1,jl0:jl1) = blks(iblk,jblk)%hunit(i0:i1,j0:j1)
 
          IF (end_of_data) THEN
             EXIT
@@ -1028,266 +733,6 @@ CONTAINS
       ENDDO
 
    END SUBROUTINE aggregate_data
-
-   !------------------------------------
-   SUBROUTINE excute_data_task (t_id)
-
-      USE task_mod
-      IMPLICIT NONE
-
-      integer (kind=4), intent(in) :: t_id
-      integer (kind=4) :: sbuf(2) 
-      integer (kind=4) :: iproc
-
-      sbuf = (/t_id, p_iam_glb/)
-      CALL mpi_send (sbuf, 2, MPI_INTEGER, p_data_address, t_id, p_comm_glb, p_err) 
-
-   END SUBROUTINE excute_data_task
-
-   !------------------------------------
-   SUBROUTINE data_daemon ()
-
-      USE task_mod
-      IMPLICIT NONE
-
-      integer (kind=4) :: rbuf(2), isrc, t_id
-   
-      integer (kind=4) :: iblk, jblk
-      integer (kind=4) :: i, j, ii, jj 
-      
-      integer (kind=4) :: nnode, inode
-      integer (kind=4), allocatable :: route(:,:)
-      integer (kind=4) :: icatch
-      real    (kind=4), allocatable :: elvdata(:)
-      
-      integer (kind=4) :: nriv, iriv
-      integer (kind=4), allocatable :: river(:,:)
-
-      integer (kind=4) :: i0, i1, j0, j1
-      integer (kind=4) :: bnds(6)
-      integer (kind=4) :: dsize
-
-      integer (kind=4), allocatable :: hunit_recv(:,:)
-
-
-      DO WHILE (.true.)
-
-         CALL mpi_recv (rbuf, 2, MPI_INTEGER, MPI_ANY_SOURCE, MPI_ANY_TAG, p_comm_glb, p_stat, p_err)
-         t_id = rbuf(1)
-         isrc = rbuf(2)
-
-         select CASE (t_id)
-
-         CASE (t_check_data_exist)
-            
-            CALL mpi_recv (bnds(1:2), 2, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-            iblk = bnds(1);  jblk = bnds(2)
-            CALL mpi_send (blks(iblk,jblk)%ready, 1, MPI_LOGICAL, isrc, t_id, p_comm_glb, p_err)
-         
-         CASE (t_inquire_gridinfo)
-
-            CALL mpi_recv (bnds, 6, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            iblk = bnds(1);  jblk = bnds(2)
-
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-
-            i0 = bnds(3); i1 = bnds(4); j0 = bnds(5); j1 = bnds(6)
-            CALL mpi_send (blks(iblk,jblk)%lon(j0:j1), j1-j0+1, MPI_DOUBLE, isrc, &
-               t_id, p_comm_glb, p_err) 
-            CALL mpi_send (blks(iblk,jblk)%lat(i0:i1), i1-i0+1, MPI_DOUBLE, isrc, &
-               t_id, p_comm_glb, p_err) 
-
-         CASE (t_inquire_dir)
-
-            CALL mpi_recv (bnds, 6, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            iblk = bnds(1);  jblk = bnds(2)
-
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-
-            i0 = bnds(3); i1 = bnds(4); j0 = bnds(5); j1 = bnds(6)
-            dsize = (j1-j0+1)*(i1-i0+1)
-            CALL mpi_send (blks(iblk,jblk)%dir(i0:i1,j0:j1), dsize, MPI_INTEGER1, isrc, &
-               t_id, p_comm_glb, p_err) 
-
-         CASE (t_inquire_upa)
-
-            CALL mpi_recv (bnds, 6, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            iblk = bnds(1);  jblk = bnds(2)
-
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-
-            i0 = bnds(3); i1 = bnds(4); j0 = bnds(5); j1 = bnds(6)
-            dsize = (j1-j0+1)*(i1-i0+1)
-            CALL mpi_send (blks(iblk,jblk)%upa(i0:i1,j0:j1), dsize, MPI_REAL4, isrc, &
-               t_id, p_comm_glb, p_err) 
-
-         CASE (t_inquire_elv)
-
-            CALL mpi_recv (bnds, 6, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            iblk = bnds(1);  jblk = bnds(2)
-
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-
-            i0 = bnds(3); i1 = bnds(4); j0 = bnds(5); j1 = bnds(6)
-            dsize = (j1-j0+1)*(i1-i0+1)
-            CALL mpi_send (blks(iblk,jblk)%elv(i0:i1,j0:j1), dsize, MPI_REAL4, isrc, &
-               t_id, p_comm_glb, p_err) 
-
-         CASE (t_inquire_icat)
-
-            CALL mpi_recv (bnds, 6, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            iblk = bnds(1);  jblk = bnds(2)
-
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-
-            i0 = bnds(3); i1 = bnds(4); j0 = bnds(5); j1 = bnds(6)
-            dsize = (j1-j0+1)*(i1-i0+1)
-            CALL mpi_send (blks(iblk,jblk)%icat(i0:i1,j0:j1), dsize, MPI_INTEGER, isrc, &
-               t_id, p_comm_glb, p_err) 
-
-         CASE (t_inquire_wth)
-
-            CALL mpi_recv (bnds, 6, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            iblk = bnds(1);  jblk = bnds(2)
-
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-
-            i0 = bnds(3); i1 = bnds(4); j0 = bnds(5); j1 = bnds(6)
-            dsize = (j1-j0+1)*(i1-i0+1)
-            CALL mpi_send (blks(iblk,jblk)%wth(i0:i1,j0:j1), dsize, MPI_REAL4, isrc, &
-               t_id, p_comm_glb, p_err) 
-
-         CASE (t_inquire_hnd)
-
-            CALL mpi_recv (bnds, 6, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            iblk = bnds(1);  jblk = bnds(2)
-
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-
-            i0 = bnds(3); i1 = bnds(4); j0 = bnds(5); j1 = bnds(6)
-            dsize = (j1-j0+1)*(i1-i0+1)
-            CALL mpi_send (blks(iblk,jblk)%hnd(i0:i1,j0:j1), dsize, MPI_REAL4, isrc, &
-               t_id, p_comm_glb, p_err) 
-
-         CASE (t_inquire_hunit)
-
-            CALL mpi_recv (bnds, 6, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            iblk = bnds(1);  jblk = bnds(2)
-
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-
-            i0 = bnds(3); i1 = bnds(4); j0 = bnds(5); j1 = bnds(6)
-            dsize = (j1-j0+1)*(i1-i0+1)
-            CALL mpi_send (blks(iblk,jblk)%hunit(i0:i1,j0:j1), dsize, MPI_INTEGER, isrc, &
-               t_id, p_comm_glb, p_err) 
-
-         CASE (t_inquire_lake)
-
-            CALL mpi_recv (bnds, 6, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            iblk = bnds(1);  jblk = bnds(2)
-
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-
-            i0 = bnds(3); i1 = bnds(4); j0 = bnds(5); j1 = bnds(6)
-            dsize = (j1-j0+1)*(i1-i0+1)
-            CALL mpi_send (blks(iblk,jblk)%lake(i0:i1,j0:j1), dsize, MPI_INTEGER, isrc, &
-               t_id, p_comm_glb, p_err) 
-
-         CASE (t_update_river)
-
-            CALL mpi_recv (iblk, 1, MPI_INTEGER4, isrc, t_id, p_comm_glb, p_stat, p_err)
-            CALL mpi_recv (jblk, 1, MPI_INTEGER4, isrc, t_id, p_comm_glb, p_stat, p_err)
-            CALL mpi_recv (nriv, 1, MPI_INTEGER4, isrc, t_id, p_comm_glb, p_stat, p_err)
-            allocate (river (3,nriv))
-            CALL mpi_recv (river, nriv*3, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-
-            DO iriv = 1, nriv
-               i = river(1,iriv) - blks(iblk,jblk)%idsp
-               j = river(2,iriv) - blks(iblk,jblk)%jdsp
-               blks(iblk,jblk)%icat(i,j) = river(3,iriv)
-            ENDDO
-
-            deallocate (river)
-
-         CASE (t_update_icatch)
-
-            CALL mpi_recv (nnode,  1, MPI_INTEGER4, isrc, t_id, p_comm_glb, p_stat, p_err)
-            CALL mpi_recv (iblk,   1, MPI_INTEGER4, isrc, t_id, p_comm_glb, p_stat, p_err)
-            CALL mpi_recv (jblk,   1, MPI_INTEGER4, isrc, t_id, p_comm_glb, p_stat, p_err)
-            CALL mpi_recv (icatch, 1, MPI_INTEGER4, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            allocate (route (2,nnode))
-            CALL mpi_recv (route, nnode*2, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-            
-            allocate (elvdata (nnode))
-            CALL mpi_recv (elvdata, nnode, MPI_REAL4, isrc, t_id, p_comm_glb, p_stat, p_err)
-            
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-            
-            DO inode = 1, nnode
-               i = route(1,inode) - blks(iblk,jblk)%idsp
-               j = route(2,inode) - blks(iblk,jblk)%jdsp
-               IF ((blks(iblk,jblk)%icat (i,j) /= 0) &
-                  .and. (blks(iblk,jblk)%icat (i,j) /= icatch)) THEN
-                  write(*,*) 'mismatch while update catnum', &
-                     blks(iblk,jblk)%icat(i,j), icatch, route(:,inode)
-                  STOP
-               ENDIF
-               blks(iblk,jblk)%icat (i,j) = icatch
-               blks(iblk,jblk)%hnd  (i,j) = elvdata(inode)
-            ENDDO
-
-            deallocate (route)
-            deallocate (elvdata)
-
-         CASE (t_update_hunit)
-
-            CALL mpi_recv (icatch, 1, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-            CALL mpi_recv (bnds,   6, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err)
-
-            iblk = bnds(1);  jblk = bnds(2)
-            i0 = bnds(3); i1 = bnds(4); j0 = bnds(5); j1 = bnds(6)
-            dsize = (j1-j0+1)*(i1-i0+1)
-            
-            allocate (hunit_recv (i1-i0+1,j1-j0+1))
-            CALL mpi_recv (hunit_recv, dsize, MPI_INTEGER, isrc, t_id, p_comm_glb, p_stat, p_err) 
-            
-            IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
-
-            DO i = i0, i1
-               DO j = j0, j1
-                  IF (blks(iblk,jblk)%icat(i,j) == icatch) THEN
-                     blks(iblk,jblk)%hunit(i,j) = hunit_recv(i-i0+1,j-j0+1)
-                  ENDIF
-               ENDDO
-            ENDDO
-
-            deallocate (hunit_recv)
-
-         CASE (t_flush_blocks)
-
-            CALL flush_blocks (output = .false.)
-
-         CASE (t_exit) 
-
-            EXIT
-
-         END select 
-
-      ENDDO
-
-   END SUBROUTINE data_daemon
 
    !-------------------------------------------------------
    SUBROUTINE append_river (river, nriv, ij0, icatch)
@@ -1361,7 +806,7 @@ CONTAINS
          IF (allocated (thisinfo%hru_plen))   deallocate (thisinfo%hru_plen)
          IF (allocated (thisinfo%hru_lfac))   deallocate (thisinfo%hru_lfac)
 
-         IF (allocated (thisinfo%bsn_bnds      )) deallocate (thisinfo%bsn_bnds      )
+         IF (allocated (thisinfo%bsn_nswe      )) deallocate (thisinfo%bsn_nswe      )
          IF (allocated (thisinfo%bsn_num_hru   )) deallocate (thisinfo%bsn_num_hru   )
          IF (allocated (thisinfo%bsn_downstream)) deallocate (thisinfo%bsn_downstream)
          IF (allocated (thisinfo%bsn_num_nbr   )) deallocate (thisinfo%bsn_num_nbr   )
@@ -1374,8 +819,6 @@ CONTAINS
          thisinfo => thisinfo%next
 
       ENDDO
-
-      CALL free_window ()
 
    END SUBROUTINE free_memory
    
