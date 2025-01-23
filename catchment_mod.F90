@@ -134,7 +134,7 @@ CONTAINS
                   write(*,100) trim(binfo), networkinfo%cid(irivseg), networkinfo%nswe(:,irivseg), &
                      irivseg, thisinfo%nrivseg, npall, head-tail+1
                   100 format('(S2) Catchment ',A,': ID ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
-                     ' (', I5, '/', I5, ' done), ', I10, ' Pixels, ', I3, ' Rivers') 
+                     ' (', I5, '/', I5, ' done), ', I10, ' Pixels, ', I5, ' Rivers') 
 
                ELSE
                   ! lake
@@ -554,114 +554,5 @@ CONTAINS
       ENDDO
 
    END SUBROUTINE update_catchment_boundaries
-
-
-   SUBROUTINE get_basin_neighbour (icat, imin, jmin, np, mp, catch, &
-         nnb, nbindex, lenborder)
-
-      USE hydro_data_mod
-
-      IMPLICIT NONE
-
-      integer (kind = 4), intent(in) :: icat 
-      integer (kind = 4), intent(in) :: imin, jmin
-      integer (kind = 4), intent(in) :: np, mp
-      integer (kind = 4), intent(in) :: catch (np,mp)    
-
-      integer (kind = 4), intent(out) :: nnb
-      integer (kind = 4), allocatable, intent(out) :: nbindex  (:)
-      real    (kind = 4), allocatable, intent(out) :: lenborder(:)
-
-      ! Local Variable
-      integer :: ithis, jthis, inext, jnext, igthis, jgthis, ignext, jgnext
-      real (kind = 4) :: blen
-
-      nnb = 0
-      allocate (nbindex  (np*mp))
-      allocate (lenborder(np*mp))
-      lenborder(:) = 0
-
-      DO ithis = 1, np
-         DO jthis = 1, mp
-            IF (catch(ithis,jthis) == icat) THEN
-
-               DO inext = ithis-1, ithis+1
-                  DO jnext = jthis-1, jthis+1
-                     IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp) &
-                        .and. ((inext /= ithis) .or. (jnext /= jthis))) THEN
-                        IF (catch(inext,jnext) /= icat) THEN
-
-                           igthis = ithis + imin - 1
-                           ignext = inext + imin - 1
-                           jgthis = jthis + jmin - 1;  IF (jgthis > mglb) jgthis = jgthis - mglb
-                           jgnext = jnext + jmin - 1;  IF (jgnext > mglb) jgnext = jgnext - mglb
-
-                           blen = dist_between (igthis, jgthis, ignext, jgnext)
-
-                           IF (abs(inext-ithis)+abs(jnext-jthis) == 1) THEN
-                              blen = 0.5 * blen
-                           ELSE
-                              blen = 0.25 * blen
-                           ENDIF
-                              
-                           CALL acc_border(icat, nnb, nbindex, catch(inext,jnext), lenborder, blen)
-
-                        ENDIF
-                     ENDIF
-                  ENDDO
-               ENDDO
-
-            ENDIF
-         ENDDO
-      ENDDO
-
-      IF (nnb == 0) THEN
-         write(*,*) 'Neighbours: ', icat, ' has no neighbours.'
-      ELSE
-         write(*,*) 'Neighbours: ', icat, ' has ', nnb, 'neighbours', sum(lenborder(1:nnb))/nnb, &
-            minval(lenborder(1:nnb)), maxval(lenborder(1:nnb))
-      ENDIF
-      
-   END SUBROUTINE get_basin_neighbour
-
-
-   SUBROUTINE acc_border (icat, nnb, nbindex, jcat, borderlen, blen)
-
-      IMPLICIT NONE
-
-      integer (kind = 4), intent(in) :: icat 
-
-      integer (kind = 4), intent(inout) :: nnb
-      integer (kind = 4), intent(inout) :: nbindex(:)
-      integer (kind = 4), intent(in) :: jcat 
-
-      real (kind = 4), intent(inout) :: borderlen(:)
-      real (kind = 4), intent(in) :: blen
-
-      ! Local Variables
-      integer :: inb
-
-      IF ((jcat <= 0) .and. (jcat /= -9)) RETURN
-
-      IF (jcat == icat) THEN
-         write(*,*) 'Warning: border finding error.'
-      ENDIF
-
-      IF (nnb > 0) THEN
-         inb = findloc(nbindex(1:nnb),jcat,dim=1)
-         IF (inb <= 0) THEN
-            nnb = nnb + 1
-            nbindex(nnb) = jcat
-            inb = nnb
-         ENDIF
-      ELSE
-         nnb = 1
-         nbindex(nnb) = jcat
-         inb = nnb
-      ENDIF
-
-      borderlen(inb) = borderlen(inb) + blen
-
-   END SUBROUTINE acc_border
 
 END MODULE catchment_mod

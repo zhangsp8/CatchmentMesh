@@ -47,9 +47,10 @@ MODULE hydro_data_mod
    
    real (kind=4) :: dlat(nglb)
    real (kind=4) :: dlon(nglb)
-   
 
    type info_typ
+
+      integer :: ithisblk, jthisblk
 
       ! riv_info_pix(1:2,:) : river pixel coordinate;  
       ! riv_info_pix(3,:)   : catchment id this pixel located in
@@ -60,6 +61,7 @@ MODULE hydro_data_mod
       real    (kind=4), allocatable :: riv_dep (:)
 
       ! hydrounit information
+      integer (kind=4), allocatable :: bsn_num_hru(:)    
       integer (kind=4), allocatable :: hru_indx (:,:)    
       real    (kind=4), allocatable :: hru_area (:,:)
       real    (kind=4), allocatable :: hru_hand (:,:)
@@ -73,7 +75,6 @@ MODULE hydro_data_mod
       integer (kind=4) :: ntotalcat
       integer (kind=4), allocatable :: bsn_index      (:) 
       integer (kind=4), allocatable :: bsn_nswe     (:,:) 
-      integer (kind=4), allocatable :: bsn_num_hru    (:)    
       integer (kind=4), allocatable :: bsn_downstream (:) 
       integer (kind=4), allocatable :: bsn_num_nbr    (:)    
       integer (kind=4), allocatable :: bsn_idx_nbr  (:,:)    
@@ -306,7 +307,7 @@ CONTAINS
                   CALL get_filename (trim(output_dir) // '/' // trim(casename), &
                      iblk, jblk, filename)
 
-                  write(*,*) 'Write to file ', trim(filename)
+                  write(*,*) 'Write cache data to file ', trim(filename)
 
                   inquire (file=trim(filename), exist=fexists)
 
@@ -426,6 +427,28 @@ CONTAINS
       ENDIF
 
    END SUBROUTINE nextij 
+
+   !----------------------------------------------
+   SUBROUTINE enlarge_nswe (imin, imax, jmin, jmax)
+
+      IMPLICIT NONE
+
+      integer, intent(inout) :: imin, imax, jmin, jmax
+               
+      imin = max(imin-1, inorth)
+      imax = min(imax+1, isouth)
+
+      IF ((jwest == 1) .and. (jeast == mglb)) THEN
+         jmin = jmin-1
+         jmax = jmax+1
+      ELSE
+         IF (jmin /= jwest) jmin = jmin-1
+         IF (jmax /= jeast) jmax = jmax+1
+      ENDIF
+      IF (jmin == 0)   jmin = mglb
+      IF (jmax > mglb) jmax = 1
+
+   END SUBROUTINE enlarge_nswe
 
    !----------------------------------------------
    logical FUNCTION is_feasible_step (i, j, i_dn, j_dn) 
@@ -733,6 +756,47 @@ CONTAINS
       ENDDO
 
    END SUBROUTINE aggregate_data
+
+   !------------------------------------
+   SUBROUTINE aggregate_catch (imin, imax, jmin, jmax, np, mp, icat)
+      
+      USE task_mod
+      IMPLICIT NONE
+   
+      integer (kind=4), intent(in) :: imin, imax, jmin, jmax
+      integer (kind=4), intent(in) :: np, mp
+      integer (kind=4), intent(inout) :: icat(np,mp)    
+   
+      integer (kind=4) :: iblk, jblk, iblk1, jblk1
+      integer (kind=4) :: i0, i1, j0, j1, il0, il1, jl0, jl1
+      logical :: end_of_data
+      character(len=256) :: filename
+            
+      icat(:,:) = -9
+      
+      iblk = (imin-1)/nbox + 1
+      jblk = (jmin-1)/mbox + 1
+      DO WHILE (.true.)
+
+         CALL block_iterator (imin, imax, jmin, jmax, iblk, jblk, &
+            i0, i1, j0, j1, il0, il1, jl0, jl1, &
+            iblk1, jblk1, end_of_data)
+
+         IF (.not. allocated(blks(iblk,jblk)%icat)) THEN
+            CALL get_filename (trim(output_dir) // '/' // trim(casename), iblk, jblk, filename)
+            CALL ncio_read_serial (filename, 'icatchment2d', blks(iblk,jblk)%icat )
+         ENDIF
+
+         icat(il0:il1,jl0:jl1) = blks(iblk,jblk)%icat(i0:i1,j0:j1)
+
+         IF (end_of_data) THEN
+            EXIT
+         ELSE
+            iblk = iblk1; jblk = jblk1
+         ENDIF
+      ENDDO
+
+   END SUBROUTINE aggregate_catch
 
    !-------------------------------------------------------
    SUBROUTINE append_river (river, nriv, ij0, icatch)

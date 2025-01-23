@@ -171,6 +171,9 @@ CONTAINS
                      thisinfo => thisinfo%next
                      thisinfo%next => null()
                   ENDIF
+
+                  thisinfo%ithisblk = ithisblk
+                  thisinfo%jthisblk = jthisblk
          
                   IF (firstblock) firstblock = .false.
                

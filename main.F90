@@ -5,7 +5,7 @@ PROGRAM main
    USE river_lake_mod
    USE catchment_mod
    USE hillslope_mod
-   USE information_mod
+   USE neighbour_mod
    USE output_mod
 
    IMPLICIT NONE
@@ -20,8 +20,8 @@ PROGRAM main
    real    (kind=4) :: catsizemin   = 1.0
    real    (kind=4) :: lakecellsize = -1.e36
    integer (kind=4) :: nlev_max     = 10
-   integer (kind=4) :: maxhunum
-   integer (kind=4) :: maxnnb
+   integer (kind=4) :: nhrumax
+   integer (kind=4) :: nnbmax
    integer (kind=4) :: ntotalall
 
    namelist /catexp/   &
@@ -69,6 +69,10 @@ PROGRAM main
 
    CALL mpi_bcast (has_predefined_rivermouth, 1, MPI_LOGICAL, p_master_address, p_comm_glb, p_err)
    
+   IF (has_predefined_rivermouth) THEN
+      storage_type = 'one'
+   ENDIF
+
    ! Step 0: Initializing data and work.
    IF (p_is_master) write(*,'(A)') 'Step 0 : Assign Data and Work processors ...'
 
@@ -85,7 +89,8 @@ PROGRAM main
    thisinfo%next => null()
 
    ntotalall = 0
-   maxhunum  = 0
+
+   nhrumax = 0
    
    DO WHILE (.true.)
 
@@ -107,43 +112,29 @@ PROGRAM main
       CALL get_catchment (catsize)
 
       ! Step 3: Dividing catchment into hillslopes and hydrounits.
-      CALL get_hillslope_hydrounits (catsize, lakecellsize, nlev_max, maxhunum)
+      CALL get_hillslope_hydrounits (catsize, lakecellsize, nlev_max, nhrumax)
 
       IF (p_is_master) THEN
          ntotalall = ntotalall + thisinfo%ntotalcat
       ENDIF
-
-      IF (p_is_master .and. (trim(storage_type) == 'block')) THEN
-
-         CALL flush_blocks (output = .true.)
-
-         CALL get_filename (trim(output_dir) // '/' // trim(casename), ithisblk, jthisblk, filename)
-
-         CALL ncio_define_dimension (filename, 'basin', thisinfo%ntotalcat)
-         CALL ncio_define_dimension (filename, 'bnd4' , 4)
-         CALL ncio_write_serial (filename, 'bsn_index', thisinfo%bsn_index, 'basin', compress = 1)
-         CALL ncio_write_serial (filename, 'lake_id'  , thisinfo%lake_id  , 'basin', compress = 1)
-         CALL ncio_write_serial (filename, 'bsn_nswe' , thisinfo%bsn_nswe,  'bnd4', 'basin', compress = 1)
-
-         CALL ncio_define_dimension (filename, 'river', thisinfo%nrivseg)
-         CALL ncio_write_serial (filename, 'riv_len', thisinfo%riv_len, 'river', compress = 1)
-         CALL ncio_write_serial (filename, 'riv_elv', thisinfo%riv_elv, 'river', compress = 1)
-
-      ENDIF
-
       CALL mpi_bcast (ntotalall, 1, MPI_INTEGER, p_master_address, p_comm_glb, p_err)
 
+      IF (p_is_master .and. (trim(storage_type) == 'block')) THEN
+         CALL output_block_info (nhrumax)
+         CALL flush_blocks (output = .true.)
+      ENDIF
+         
       IF (has_predefined_rivermouth) THEN
          EXIT
       ENDIF
 
    ENDDO
 
-   ! Step 4: Get river and hillslope information.
-   CALL get_information (ntotalall, maxhunum, maxnnb)
+   ! Step 4: Get basin neighbour information.
+   CALL get_basin_neighbour (ntotalall, nnbmax)
 
    ! Step 5: Writing out results.
-   CALL output_result (maxhunum, maxnnb)
+   CALL output_result (nhrumax, nnbmax)
      
    CALL free_memory ()
 

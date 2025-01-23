@@ -1,8 +1,73 @@
 MODULE output_mod
 
 CONTAINS
+
+   SUBROUTINE output_block_info (nhrumax)
+      
+      USE task_mod
+      USE hydro_data_mod
+      USE ncio_serial
+
+      IMPLICIT NONE
    
-   SUBROUTINE output_result (maxhunum, maxnnb)
+      integer (kind=4), intent(in) :: nhrumax
+
+      integer :: iblk, jblk
+      character(len=256) :: mkdirname, filename
+      logical :: fexists
+
+      IF (p_is_master) THEN
+
+         iblk = thisinfo%ithisblk
+         jblk = thisinfo%jthisblk
+      
+         mkdirname = 'mkdir -p ' // trim(output_dir) // '/' // trim(casename)
+         CALL system(trim(mkdirname))
+
+         CALL get_filename (trim(output_dir) // '/' // trim(casename), iblk, jblk, filename)
+                  
+         write(*,*) 'Write block results to file ', trim(filename)
+
+         inquire (file=trim(filename), exist=fexists)
+
+         IF (.not. fexists) THEN
+            CALL ncio_create_file (filename)
+            CALL ncio_define_dimension (filename, 'latitude',  nbox)
+            CALL ncio_define_dimension (filename, 'longitude', mbox)
+            CALL ncio_write_serial (filename, 'latitude',  blks(iblk,jblk)%lat, &
+               'latitude' ) 
+            CALL ncio_write_serial (filename, 'longitude', blks(iblk,jblk)%lon, &
+               'longitude')
+            CALL ncio_write_serial (filename, 'elva', blks(iblk,jblk)%elv,  &
+               'latitude', 'longitude', compress = 1)
+         ENDIF
+
+         CALL ncio_define_dimension (filename, 'basin', thisinfo%ntotalcat)
+         CALL ncio_define_dimension (filename, 'nswe' , 4)
+         CALL ncio_write_serial (filename, 'bsn_index', thisinfo%bsn_index, 'basin', compress = 1)
+         CALL ncio_write_serial (filename, 'lake_id'  , thisinfo%lake_id  , 'basin', compress = 1)
+         CALL ncio_write_serial (filename, 'bsn_nswe' , thisinfo%bsn_nswe,  'nswe', 'basin', compress = 1)
+
+         CALL ncio_define_dimension (filename, 'river', thisinfo%nrivseg)
+         CALL ncio_write_serial (filename, 'riv_len', thisinfo%riv_len, 'river', compress = 1)
+         CALL ncio_write_serial (filename, 'riv_elv', thisinfo%riv_elv, 'river', compress = 1)
+         
+         CALL ncio_write_serial (filename, 'bsn_num_hru', thisinfo%bsn_num_hru, 'basin', compress = 1)
+         
+         CALL ncio_define_dimension (filename, 'hydrounit' , nhrumax)
+         CALL ncio_write_serial (filename, 'hru_indx' , thisinfo%hru_indx,  'hydrounit', 'basin', compress = 1)
+         CALL ncio_write_serial (filename, 'hru_area' , thisinfo%hru_area,  'hydrounit', 'basin', compress = 1)
+         CALL ncio_write_serial (filename, 'hru_hand' , thisinfo%hru_hand,  'hydrounit', 'basin', compress = 1)
+         CALL ncio_write_serial (filename, 'hru_elva' , thisinfo%hru_elva,  'hydrounit', 'basin', compress = 1)
+         CALL ncio_write_serial (filename, 'hru_next' , thisinfo%hru_next,  'hydrounit', 'basin', compress = 1)
+         CALL ncio_write_serial (filename, 'hru_plen' , thisinfo%hru_plen,  'hydrounit', 'basin', compress = 1)
+         CALL ncio_write_serial (filename, 'hru_lfac' , thisinfo%hru_lfac,  'hydrounit', 'basin', compress = 1)
+
+      ENDIF
+
+   END SUBROUTINE output_block_info 
+   
+   SUBROUTINE output_result (nhrumax, nnbmax)
 
       USE task_mod
       USE hydro_data_mod
@@ -10,8 +75,8 @@ CONTAINS
 
       IMPLICIT NONE
 
-      integer (kind=4), intent(in) :: maxhunum
-      integer (kind=4), intent(in) :: maxnnb
+      integer (kind=4), intent(in) :: nhrumax
+      integer (kind=4), intent(in) :: nnbmax
 
       integer (kind=4) :: np, mp
       real    (kind=8), allocatable :: longitude(:)
@@ -24,7 +89,7 @@ CONTAINS
       type(info_typ) :: outinfo
 
       character(len=256) :: filename, mkdirname
-      integer :: nthis, dsp, iunit, iblk, jblk, iloc, ic, ndim1
+      integer :: nthis, dsp, nhru, iunit, iblk, jblk, iloc, ic, ndim1
       logical :: found
       real (kind = 4), parameter :: spval = -1.e36
 
@@ -119,17 +184,18 @@ CONTAINS
          ENDIF
 
          CALL ncio_define_dimension (filename, 'catchment', outinfo%ntotalcat)
-         CALL ncio_define_dimension (filename, 'hydrounit', maxhunum)
-         CALL ncio_define_dimension (filename, 'neighbour', maxnnb)
+         CALL ncio_define_dimension (filename, 'hydrounit', nhrumax)
+         CALL ncio_define_dimension (filename, 'neighbour', nnbmax)
          CALL ncio_define_dimension (filename, 'ncds', 2)
 
 
          ! ----- output : hydro unit index -----
-         allocate(outinfo%hru_indx (maxhunum, outinfo%ntotalcat))
+         allocate(outinfo%hru_indx (nhrumax, outinfo%ntotalcat)); outinfo%hru_indx(:,:) = -1
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            outinfo%hru_indx(:,dsp+1:dsp+nthis) = thisinfo%hru_indx
+            nhru  = size(thisinfo%hru_indx,1)
+            outinfo%hru_indx(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_indx
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -138,11 +204,12 @@ CONTAINS
             'hydrounit', 'catchment', compress = 1)
 
          ! ----- output : hydro unit area -----
-         allocate(outinfo%hru_area (maxhunum, outinfo%ntotalcat))
+         allocate(outinfo%hru_area (nhrumax, outinfo%ntotalcat)); outinfo%hru_area(:,:) = 0.
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            outinfo%hru_area(:,dsp+1:dsp+nthis) = thisinfo%hru_area
+            nhru  = size(thisinfo%hru_area,1)
+            outinfo%hru_area(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_area
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -151,11 +218,12 @@ CONTAINS
             'hydrounit', 'catchment', compress = 1)
          
          ! ----- output : hydro unit hand -----
-         allocate(outinfo%hru_hand (maxhunum, outinfo%ntotalcat))
+         allocate(outinfo%hru_hand (nhrumax, outinfo%ntotalcat)); outinfo%hru_hand(:,:) = 0.
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            outinfo%hru_hand(:,dsp+1:dsp+nthis) = thisinfo%hru_hand
+            nhru  = size(thisinfo%hru_hand,1)
+            outinfo%hru_hand(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_hand
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -164,11 +232,12 @@ CONTAINS
             'hydrounit', 'catchment', compress = 1)
 
          ! ----- output : hydro unit elevation -----
-         allocate(outinfo%hru_elva (maxhunum, outinfo%ntotalcat))
+         allocate(outinfo%hru_elva (nhrumax, outinfo%ntotalcat)); outinfo%hru_elva(:,:) = 0.
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            outinfo%hru_elva(:,dsp+1:dsp+nthis) = thisinfo%hru_elva
+            nhru  = size(thisinfo%hru_elva,1)
+            outinfo%hru_elva(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_elva
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -177,11 +246,12 @@ CONTAINS
             'hydrounit', 'catchment', compress = 1)
 
          ! ----- output : hydro unit downstream -----
-         allocate(outinfo%hru_next (maxhunum, outinfo%ntotalcat))
+         allocate(outinfo%hru_next (nhrumax, outinfo%ntotalcat)); outinfo%hru_next(:,:) = -1
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            outinfo%hru_next(:,dsp+1:dsp+nthis) = thisinfo%hru_next
+            nhru  = size(thisinfo%hru_next,1)
+            outinfo%hru_next(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_next
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -190,11 +260,12 @@ CONTAINS
             'hydrounit', 'catchment', compress = 1)
 
          ! ----- output : hydro unit path length -----
-         allocate(outinfo%hru_plen (maxhunum, outinfo%ntotalcat))
+         allocate(outinfo%hru_plen (nhrumax, outinfo%ntotalcat)); outinfo%hru_plen(:,:) = 0.
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            outinfo%hru_plen(:,dsp+1:dsp+nthis) = thisinfo%hru_plen
+            nhru  = size(thisinfo%hru_plen,1)
+            outinfo%hru_plen(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_plen
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -203,11 +274,12 @@ CONTAINS
             'hydrounit', 'catchment', compress = 1)
 
          ! ----- output : hydro unit drianage contour length -----
-         allocate(outinfo%hru_lfac (maxhunum, outinfo%ntotalcat))
+         allocate(outinfo%hru_lfac (nhrumax, outinfo%ntotalcat)); outinfo%hru_lfac(:,:) = 0.
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            outinfo%hru_lfac(:,dsp+1:dsp+nthis) = thisinfo%hru_lfac
+            nhru  = size(thisinfo%hru_lfac,1)
+            outinfo%hru_lfac(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_lfac
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -220,6 +292,7 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%nrivseg
+            write(*,*) thisinfo%ithisblk, thisinfo%jthisblk, thisinfo%nrivseg, size(thisinfo%riv_len)
             outinfo%riv_len(dsp+1:dsp+nthis) = thisinfo%riv_len
             dsp = dsp + thisinfo%ntotalcat
             thisinfo => thisinfo%next
@@ -283,7 +356,7 @@ CONTAINS
             'catchment', compress = 1)
 
          ! ----- output : neighbour index of a basin -----
-         allocate(outinfo%bsn_idx_nbr (maxnnb, outinfo%ntotalcat))
+         allocate(outinfo%bsn_idx_nbr (nnbmax, outinfo%ntotalcat))
          outinfo%bsn_idx_nbr(:,:) = -1
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
@@ -298,7 +371,7 @@ CONTAINS
             'neighbour', 'catchment', compress = 1)
 
          ! ----- output : length of border between a basin and its neighbours -----
-         allocate(outinfo%bsn_len_bdr (maxnnb, outinfo%ntotalcat))
+         allocate(outinfo%bsn_len_bdr (nnbmax, outinfo%ntotalcat))
          outinfo%bsn_len_bdr(:,:) = 0
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
