@@ -187,6 +187,9 @@ CONTAINS
 
       ENDDO
 
+      IF (allocated(dir)) deallocate(dir)
+      IF (allocated(upa)) deallocate(upa)
+
    END SUBROUTINE get_next_rivermouth 
 
    SUBROUTINE get_river_lake (catsize, catsizemin, rivermouthfile, end_of_data)

@@ -42,26 +42,32 @@ CONTAINS
                'latitude', 'longitude', compress = 1)
          ENDIF
 
-         CALL ncio_define_dimension (filename, 'basin', thisinfo%ntotalcat)
-         CALL ncio_define_dimension (filename, 'nswe' , 4)
-         CALL ncio_write_serial (filename, 'bsn_index', thisinfo%bsn_index, 'basin', compress = 1)
-         CALL ncio_write_serial (filename, 'lake_id'  , thisinfo%lake_id  , 'basin', compress = 1)
-         CALL ncio_write_serial (filename, 'bsn_nswe' , thisinfo%bsn_nswe,  'nswe', 'basin', compress = 1)
+         IF (thisinfo%ntotalcat > 0) THEN
 
-         CALL ncio_define_dimension (filename, 'river', thisinfo%nrivseg)
-         CALL ncio_write_serial (filename, 'riv_len', thisinfo%riv_len, 'river', compress = 1)
-         CALL ncio_write_serial (filename, 'riv_elv', thisinfo%riv_elv, 'river', compress = 1)
-         
-         CALL ncio_write_serial (filename, 'bsn_num_hru', thisinfo%bsn_num_hru, 'basin', compress = 1)
-         
-         CALL ncio_define_dimension (filename, 'hydrounit' , nhrumax)
-         CALL ncio_write_serial (filename, 'hru_indx' , thisinfo%hru_indx,  'hydrounit', 'basin', compress = 1)
-         CALL ncio_write_serial (filename, 'hru_area' , thisinfo%hru_area,  'hydrounit', 'basin', compress = 1)
-         CALL ncio_write_serial (filename, 'hru_hand' , thisinfo%hru_hand,  'hydrounit', 'basin', compress = 1)
-         CALL ncio_write_serial (filename, 'hru_elva' , thisinfo%hru_elva,  'hydrounit', 'basin', compress = 1)
-         CALL ncio_write_serial (filename, 'hru_next' , thisinfo%hru_next,  'hydrounit', 'basin', compress = 1)
-         CALL ncio_write_serial (filename, 'hru_plen' , thisinfo%hru_plen,  'hydrounit', 'basin', compress = 1)
-         CALL ncio_write_serial (filename, 'hru_lfac' , thisinfo%hru_lfac,  'hydrounit', 'basin', compress = 1)
+            CALL ncio_define_dimension (filename, 'basin', thisinfo%ntotalcat)
+            CALL ncio_define_dimension (filename, 'nswe' , 4)
+            CALL ncio_write_serial (filename, 'bsn_index', thisinfo%bsn_index, 'basin', compress = 1)
+            CALL ncio_write_serial (filename, 'lake_id'  , thisinfo%lake_id  , 'basin', compress = 1)
+            CALL ncio_write_serial (filename, 'bsn_elva' , thisinfo%bsn_elva,  'basin', compress = 1)
+            CALL ncio_write_serial (filename, 'bsn_downstream' , thisinfo%bsn_downstream,  'basin', compress = 1)
+            CALL ncio_write_serial (filename, 'bsn_nswe' , thisinfo%bsn_nswe,  'nswe', 'basin', compress = 1)
+
+            CALL ncio_define_dimension (filename, 'river', thisinfo%nrivseg)
+            CALL ncio_write_serial (filename, 'riv_len', thisinfo%riv_len, 'river', compress = 1)
+            CALL ncio_write_serial (filename, 'riv_elv', thisinfo%riv_elv, 'river', compress = 1)
+
+            CALL ncio_write_serial (filename, 'bsn_num_hru', thisinfo%bsn_num_hru, 'basin', compress = 1)
+
+            CALL ncio_define_dimension (filename, 'hydrounit' , nhrumax)
+            CALL ncio_write_serial (filename, 'hru_indx' , thisinfo%hru_indx,  'hydrounit', 'basin', compress = 1)
+            CALL ncio_write_serial (filename, 'hru_area' , thisinfo%hru_area,  'hydrounit', 'basin', compress = 1)
+            CALL ncio_write_serial (filename, 'hru_hand' , thisinfo%hru_hand,  'hydrounit', 'basin', compress = 1)
+            CALL ncio_write_serial (filename, 'hru_elva' , thisinfo%hru_elva,  'hydrounit', 'basin', compress = 1)
+            CALL ncio_write_serial (filename, 'hru_next' , thisinfo%hru_next,  'hydrounit', 'basin', compress = 1)
+            CALL ncio_write_serial (filename, 'hru_plen' , thisinfo%hru_plen,  'hydrounit', 'basin', compress = 1)
+            CALL ncio_write_serial (filename, 'hru_lfac' , thisinfo%hru_lfac,  'hydrounit', 'basin', compress = 1)
+
+         ENDIF
 
       ENDIF
 
@@ -188,14 +194,26 @@ CONTAINS
          CALL ncio_define_dimension (filename, 'neighbour', nnbmax)
          CALL ncio_define_dimension (filename, 'ncds', 2)
 
+         ! ----- output : number of hydro units in a basin -----
+         allocate(outinfo%bsn_num_hru (outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            IF (nthis > 0) outinfo%bsn_num_hru(dsp+1:dsp+nthis) = thisinfo%bsn_num_hru
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'basin_numhru', outinfo%bsn_num_hru, &
+            'catchment', compress = 1)
 
          ! ----- output : hydro unit index -----
          allocate(outinfo%hru_indx (nhrumax, outinfo%ntotalcat)); outinfo%hru_indx(:,:) = -1
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            nhru  = size(thisinfo%hru_indx,1)
-            outinfo%hru_indx(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_indx
+            IF (nthis > 0) nhru  = size(thisinfo%hru_indx,1)
+            IF (nthis > 0) outinfo%hru_indx(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_indx
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -208,8 +226,8 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            nhru  = size(thisinfo%hru_area,1)
-            outinfo%hru_area(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_area
+            IF (nthis > 0) nhru  = size(thisinfo%hru_area,1)
+            IF (nthis > 0) outinfo%hru_area(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_area
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -222,8 +240,8 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            nhru  = size(thisinfo%hru_hand,1)
-            outinfo%hru_hand(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_hand
+            IF (nthis > 0) nhru  = size(thisinfo%hru_hand,1)
+            IF (nthis > 0) outinfo%hru_hand(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_hand
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -236,8 +254,8 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            nhru  = size(thisinfo%hru_elva,1)
-            outinfo%hru_elva(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_elva
+            IF (nthis > 0) nhru  = size(thisinfo%hru_elva,1)
+            IF (nthis > 0) outinfo%hru_elva(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_elva
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -250,8 +268,8 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            nhru  = size(thisinfo%hru_next,1)
-            outinfo%hru_next(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_next
+            IF (nthis > 0) nhru  = size(thisinfo%hru_next,1)
+            IF (nthis > 0) outinfo%hru_next(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_next
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -264,8 +282,8 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            nhru  = size(thisinfo%hru_plen,1)
-            outinfo%hru_plen(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_plen
+            IF (nthis > 0) nhru  = size(thisinfo%hru_plen,1)
+            IF (nthis > 0) outinfo%hru_plen(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_plen
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -278,8 +296,8 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            nhru  = size(thisinfo%hru_lfac,1)
-            outinfo%hru_lfac(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_lfac
+            IF (nthis > 0) nhru  = size(thisinfo%hru_lfac,1)
+            IF (nthis > 0) outinfo%hru_lfac(1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_lfac
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -292,8 +310,7 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%nrivseg
-            write(*,*) thisinfo%ithisblk, thisinfo%jthisblk, thisinfo%nrivseg, size(thisinfo%riv_len)
-            outinfo%riv_len(dsp+1:dsp+nthis) = thisinfo%riv_len
+            IF (nthis > 0) outinfo%riv_len(dsp+1:dsp+nthis) = thisinfo%riv_len
             dsp = dsp + thisinfo%ntotalcat
             thisinfo => thisinfo%next
          ENDDO
@@ -307,7 +324,7 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%nrivseg
-            outinfo%riv_elv(dsp+1:dsp+nthis) = thisinfo%riv_elv
+            IF (nthis > 0) outinfo%riv_elv(dsp+1:dsp+nthis) = thisinfo%riv_elv
             dsp = dsp + thisinfo%ntotalcat
             thisinfo => thisinfo%next
          ENDDO
@@ -316,25 +333,12 @@ CONTAINS
             'catchment', compress = 1)
          CALL ncio_put_attr_real4 (filename, 'river_elevation', 'missing_value', spval)
 
-         ! ----- output : number of hydro units in a basin -----
-         allocate(outinfo%bsn_num_hru (outinfo%ntotalcat))
-         thisinfo => allinfo;  dsp = 0
-         DO WHILE (associated(thisinfo))
-            nthis = thisinfo%ntotalcat
-            outinfo%bsn_num_hru(dsp+1:dsp+nthis) = thisinfo%bsn_num_hru
-            dsp = dsp + nthis
-            thisinfo => thisinfo%next
-         ENDDO
-
-         CALL ncio_write_serial (filename, 'basin_numhru', outinfo%bsn_num_hru, &
-            'catchment', compress = 1)
-
          ! ----- output : downstream basin -----
          allocate(outinfo%bsn_downstream (outinfo%ntotalcat))
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            outinfo%bsn_downstream(dsp+1:dsp+nthis) = thisinfo%bsn_downstream
+            IF (nthis > 0) outinfo%bsn_downstream(dsp+1:dsp+nthis) = thisinfo%bsn_downstream
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -347,7 +351,7 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            outinfo%bsn_num_nbr(dsp+1:dsp+nthis) = thisinfo%bsn_num_nbr
+            IF (nthis > 0) outinfo%bsn_num_nbr(dsp+1:dsp+nthis) = thisinfo%bsn_num_nbr
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -361,8 +365,8 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            ndim1 = size(thisinfo%bsn_idx_nbr,1)
-            outinfo%bsn_idx_nbr(1:ndim1,dsp+1:dsp+nthis) = thisinfo%bsn_idx_nbr
+            IF (nthis > 0) ndim1 = size(thisinfo%bsn_idx_nbr,1)
+            IF (nthis > 0) outinfo%bsn_idx_nbr(1:ndim1,dsp+1:dsp+nthis) = thisinfo%bsn_idx_nbr
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -376,8 +380,8 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            ndim1 = size(thisinfo%bsn_len_bdr,1)
-            outinfo%bsn_len_bdr(1:ndim1,dsp+1:dsp+nthis) = thisinfo%bsn_len_bdr
+            IF (nthis > 0) ndim1 = size(thisinfo%bsn_len_bdr,1)
+            IF (nthis > 0) outinfo%bsn_len_bdr(1:ndim1,dsp+1:dsp+nthis) = thisinfo%bsn_len_bdr
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -390,7 +394,7 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            outinfo%bsn_elva(dsp+1:dsp+nthis) = thisinfo%bsn_elva
+            IF (nthis > 0) outinfo%bsn_elva(dsp+1:dsp+nthis) = thisinfo%bsn_elva
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
@@ -403,7 +407,7 @@ CONTAINS
          thisinfo => allinfo;  dsp = 0
          DO WHILE (associated(thisinfo))
             nthis = thisinfo%ntotalcat
-            outinfo%lake_id(dsp+1:dsp+nthis) = thisinfo%lake_id
+            IF (nthis > 0) outinfo%lake_id(dsp+1:dsp+nthis) = thisinfo%lake_id
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO

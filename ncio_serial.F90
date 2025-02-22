@@ -10,7 +10,9 @@ MODULE ncio_serial
    PUBLIC :: ncio_define_dimension
 
    interface ncio_read_serial
+      MODULE procedure ncio_read_serial_real4_1d 
       MODULE procedure ncio_read_serial_real8_1d 
+      MODULE procedure ncio_read_serial_int32_1d 
       MODULE procedure ncio_read_serial_int8_2d 
       MODULE procedure ncio_read_serial_int32_2d 
       MODULE procedure ncio_read_serial_real4_2d 
@@ -139,6 +141,59 @@ CONTAINS
 
    END SUBROUTINE ncio_read_serial_real8_1d
 
+   !---------------------------------------------------------
+   SUBROUTINE ncio_read_serial_real4_1d (filename, dataname, rdata)
+
+      USE netcdf
+      USE precision
+      IMPLICIT NONE
+
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      real(kind=4), allocatable, intent(out) :: rdata (:)
+
+      ! Local variables
+      integer :: ncid, varid
+      integer, allocatable :: varsize(:)
+
+      CALL ncio_inquire_varsize(filename, dataname, varsize)
+      allocate (rdata (varsize(1)) )
+
+      CALL nccheck( nf90_open(trim(filename), NF90_NOWRITE, ncid) )
+      CALL nccheck( nf90_inq_varid(ncid, trim(dataname), varid) )
+      CALL nccheck( nf90_get_var(ncid, varid, rdata) )
+      CALL nccheck( nf90_close(ncid) )
+
+      deallocate (varsize)
+
+   END SUBROUTINE ncio_read_serial_real4_1d
+
+   !---------------------------------------------------------
+   SUBROUTINE ncio_read_serial_int32_1d (filename, dataname, rdata)
+
+      USE netcdf
+      USE precision
+      IMPLICIT NONE
+
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: dataname
+      integer, allocatable, intent(out) :: rdata (:)
+
+      ! Local variables
+      integer :: ncid, varid
+      integer, allocatable :: varsize(:)
+
+      CALL ncio_inquire_varsize(filename, dataname, varsize)
+      allocate (rdata (varsize(1)) )
+
+      CALL nccheck( nf90_open(trim(filename), NF90_NOWRITE, ncid) )
+      CALL nccheck( nf90_inq_varid(ncid, trim(dataname), varid) )
+      CALL nccheck( nf90_get_var(ncid, varid, rdata) )
+      CALL nccheck( nf90_close(ncid) )
+
+      deallocate (varsize)
+
+   END SUBROUTINE ncio_read_serial_int32_1d
    !---------------------------------------------------------
    SUBROUTINE ncio_read_serial_int8_2d (filename, dataname, rdata)
 

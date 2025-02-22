@@ -353,7 +353,6 @@ CONTAINS
             deallocate (elvdata)
 
 
-            thisinfo%ntotalcat = ncat
             allocate (thisinfo%bsn_index  (ncat))
             allocate (thisinfo%lake_id    (ncat))
             allocate (thisinfo%bsn_nswe (4,ncat))
@@ -495,6 +494,8 @@ CONTAINS
             ENDDO
             
          ENDIF
+            
+         thisinfo%ntotalcat = ncat
                   
       ENDIF
 
