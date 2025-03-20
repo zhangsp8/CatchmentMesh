@@ -12,8 +12,10 @@ PROGRAM main
 
    integer (kind = 4) :: narg
    character(len=256) :: deldir, nlfile, rmfile, filename
-   real (kind=4) :: west,  east    ! -180 to 180
-   real (kind=4) :: south, north   ! -90 to 90
+   real (kind=4) :: west  = -180.
+   real (kind=4) :: east  =  180.
+   real (kind=4) :: south = -90.
+   real (kind=4) :: north =  90.
    logical :: has_predefined_rivermouth, end_of_data
 
    real    (kind=4) :: catsize
@@ -27,7 +29,7 @@ PROGRAM main
    namelist /catexp/   &
       hydro_dir, lake_dir, output_dir, casename, storage_type, &
       catsize, lakecellsize, catsizemin, nlev_max, &
-      west, east, south, north
+      west, east, south, north, out_of_region
 
    CALL task_init  ()
 
@@ -66,6 +68,7 @@ PROGRAM main
    CALL mpi_bcast (east,           1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
    CALL mpi_bcast (south,          1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
    CALL mpi_bcast (north,          1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (out_of_region,  1,   MPI_LOGICAL, p_master_address, p_comm_glb, p_err)
 
    CALL mpi_bcast (has_predefined_rivermouth, 1, MPI_LOGICAL, p_master_address, p_comm_glb, p_err)
    

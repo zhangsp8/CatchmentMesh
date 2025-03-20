@@ -107,7 +107,7 @@ CONTAINS
                               ishftc(int(-128,1),idir), i_up, j_up)
 
                            IF (((pixellist(1,iplist) /= i_up) .or. (pixellist(2,iplist) /= j_up)) &
-                              .and. within_region(i_up,j_up)) THEN
+                              .and. within_region(i_up,j_up,.false.)) THEN
                               IF (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) THEN
                                  IF (get_icat(i_up,j_up) == 0) THEN
                                     elv = get_elv(i_up, j_up)
@@ -154,7 +154,7 @@ CONTAINS
                            ishftc(int(-128,1),idir), i_up, j_up)
 
                         IF (((lakepixels(1,iplake) /= i_up) .or. (lakepixels(2,iplake) /= j_up)) &
-                           .and. within_region(i_up,j_up)) THEN
+                           .and. within_region(i_up,j_up,.false.)) THEN
                            IF (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) THEN
                               IF (get_lake(i_up,j_up) == lakeid) THEN
                                  CALL append_plist3 (lakepixels, nplake, i_up, j_up, elvdata, 0._4)
@@ -186,7 +186,7 @@ CONTAINS
                            ishftc(int(-128,1),idir), i_up, j_up)
 
                         IF (((lakepixels(1,iplake) /= i_up) .or. (lakepixels(2,iplake) /= j_up)) &
-                           .and. within_region(i_up,j_up)) THEN
+                           .and. within_region(i_up,j_up,.false.)) THEN
                            IF (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) THEN
                               IF (get_lake(i_up,j_up) /= lakeid) THEN
                                  IF (get_upa(i_up,j_up) < catsize) THEN
@@ -306,7 +306,7 @@ CONTAINS
 
                               DO idir = 1, 8
                                  CALL nextij (i, j, ishftc(int(-128,1),idir), i_up, j_up)
-                                 IF (((i /= i_up) .or. (j /= j_up)) .and. within_region(i_up,j_up)) THEN
+                                 IF (((i /= i_up) .or. (j /= j_up)) .and. within_region(i_up,j_up,.false.)) THEN
                                     IF (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) THEN
                                        IF (get_icat(i_up,j_up) == 0) THEN
                                           elv = get_elv(i_up, j_up)
@@ -413,7 +413,7 @@ CONTAINS
                            ! 0: river mouth; -1: inland depression; 
                            IF ((dir_this /= 0) .and. (dir_this /= -1)) THEN
                               CALL nextij (i, j, dir_this, i_dn, j_dn)
-                              IF (within_region(i_dn,j_dn)) THEN
+                              IF (within_region(i_dn,j_dn,.false.)) THEN
                                  cdthis = get_icat(i_dn,j_dn)
                                  IF (cdthis == 0) cdthis = -3 ! downstream is land, but not in the region.
                               ELSE
@@ -455,7 +455,7 @@ CONTAINS
                            ! 0: river mouth; -1: inland depression; 
                            IF ((dir_this /= 0) .and. (dir_this /= -1)) THEN
                               CALL nextij (i, j, dir_this, i_dn, j_dn)
-                              IF (within_region(i_dn,j_dn)) THEN
+                              IF (within_region(i_dn,j_dn,.false.)) THEN
                                  cdthis = get_icat(i_dn,j_dn)
                                  IF (cdthis == 0) cdthis = -3 ! downstream is land, but not in the region.
                               ELSE

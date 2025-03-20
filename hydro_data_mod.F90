@@ -44,6 +44,7 @@ MODULE hydro_data_mod
    type (block_typ) :: blks (nblock,mblock)
 
    integer (kind=4) :: inorth, isouth, jwest, jeast
+   logical :: out_of_region = .false.
    
    real (kind=4) :: dlat(nglb)
    real (kind=4) :: dlon(nglb)
@@ -486,13 +487,18 @@ CONTAINS
    END FUNCTION is_feasible_step
 
    !----------------------------------------------
-   logical FUNCTION within_region (i, j) 
+   logical FUNCTION within_region (i, j, strict) 
 
       IMPLICIT NONE
 
       integer (kind=4), intent(in) :: i, j
+      logical :: strict
 
       within_region = .true.
+
+      IF ((.not. strict) .and. out_of_region) THEN
+         RETURN
+      ENDIF
 
       IF ((i < inorth) .or. (i > isouth)) THEN
          within_region = .false.

@@ -99,7 +99,7 @@ CONTAINS
                   DO i = 1, nbox
                      imouth = idsp + i
                      jmouth = jdsp + j
-                     IF (within_region(imouth, jmouth)) THEN
+                     IF (within_region(imouth, jmouth,.true.)) THEN
                         ! river mouth and inland depression.
                         IF (dir(i,j) == 0) THEN
                            IF (upa(i,j) > catsizemin) THEN
@@ -109,7 +109,7 @@ CONTAINS
                            nmouth = nmouth + 1
                         ELSEIF (on_region_boundary(imouth,jmouth) .and. (upa(i,j) >= catsize)) THEN
                            CALL nextij (imouth, jmouth, dir(i,j), inext, jnext)
-                           IF (.not. within_region(inext,jnext)) THEN
+                           IF (.not. within_region(inext,jnext,.true.)) THEN
                               nmouth = nmouth + 1
                            ENDIF
                         ENDIF
@@ -134,7 +134,7 @@ CONTAINS
                      DO i = 1, nbox
                         imouth = idsp + i
                         jmouth = jdsp + j
-                        IF (within_region(imouth, jmouth)) THEN
+                        IF (within_region(imouth, jmouth,.true.)) THEN
                            ! river mouth and inland depression.
                            IF (dir(i,j) == 0) THEN
                               IF (upa(i,j) > catsizemin) THEN
@@ -152,7 +152,7 @@ CONTAINS
                               98 format('(S1) ',A,' mouth found : (',I6,',',I6,'), upa ',F8.0, ' inland depression.')
                            ELSEIF (on_region_boundary(imouth,jmouth) .and. (upa(i,j) >= catsize)) THEN
                               CALL nextij (imouth, jmouth, dir(i,j), inext, jnext)
-                              IF (.not. within_region(inext,jnext)) THEN
+                              IF (.not. within_region(inext,jnext,.true.)) THEN
                                  m = m + 1
                                  rivermouth(:,m) = (/imouth, jmouth/)
                                  upa_mouth (m)   = upa(i,j)
@@ -293,7 +293,7 @@ CONTAINS
                         CALL nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
 
                         IF (((ij_this(1) /= i_up) .or. (ij_this(2) /= j_up)) &
-                           .and. within_region(i_up,j_up)) THEN
+                           .and. within_region(i_up,j_up,.false.)) THEN
                            dir_this = get_dir(i_up,j_up)
                            IF (dir_this == ishftc(int(8,1),idir)) THEN
                               upa_up(idir) = get_upa(i_up,j_up)
@@ -386,7 +386,7 @@ CONTAINS
                            ishftc(int(-128,1),idir), i_up, j_up)
 
                         IF (((lakelist(1,iplake) /= i_up) .or. (lakelist(2,iplake) /= j_up)) &
-                           .and. within_region(i_up,j_up)) THEN
+                           .and. within_region(i_up,j_up,.false.)) THEN
                            IF (get_dir(i_up,j_up) == ishftc(int(8,1),idir)) THEN
                              
                               IF (get_lake(i_up,j_up) == lakeid) THEN
