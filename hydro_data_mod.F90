@@ -44,7 +44,7 @@ MODULE hydro_data_mod
    type (block_typ) :: blks (nblock,mblock)
 
    integer (kind=4) :: inorth, isouth, jwest, jeast
-   logical :: out_of_region = .false.
+   logical :: include_all_upstream = .false.
    
    real (kind=4) :: dlat(nglb)
    real (kind=4) :: dlon(nglb)
@@ -172,11 +172,15 @@ CONTAINS
 
       IMPLICIT NONE
       integer :: i, j
-                        
-      on_region_boundary = &
-         ((i == inorth) .and. (inorth /= 1))   &
-         .or. ((i == isouth) .and. (isouth /= 180000))   &
-         .or. (((j == jwest) .or. (j == jeast )) .and. ((jwest /= 1) .or. (jeast /= mglb)))
+
+      IF (within_region(i,j,.true.)) THEN
+         on_region_boundary = &
+            ((i == inorth) .and. (inorth /= 1))   &
+            .or. ((i == isouth) .and. (isouth /= 180000))   &
+            .or. (((j == jwest) .or. (j == jeast )) .and. ((jwest /= 1) .or. (jeast /= mglb)))
+      ELSE
+         on_region_boundary = .false.
+      ENDIF
 
    END FUNCTION 
 
@@ -243,7 +247,11 @@ CONTAINS
          allocate (blks(iblk,jblk)%icat (nbox,mbox))
          allocate (blks(iblk,jblk)%hunit(nbox,mbox))
 
-         blks(iblk,jblk)%icat  = -3
+         IF (include_all_upstream) THEN
+            blks(iblk,jblk)%icat  = 0
+         ELSE
+            blks(iblk,jblk)%icat  = -3
+         ENDIF
 
          DO i = 1, nbox
             IF ((blks(iblk,jblk)%idsp + i >= inorth) & 
@@ -436,16 +444,27 @@ CONTAINS
 
       integer, intent(inout) :: imin, imax, jmin, jmax
                
-      imin = max(imin-1, inorth)
-      imax = min(imax+1, isouth)
+      IF (include_all_upstream) THEN
+         imin = max(imin-1, 1)
+         imax = min(imax+1, nglb)
+      ELSE
+         imin = max(imin-1, inorth)
+         imax = min(imax+1, isouth)
+      ENDIF
 
       IF ((jwest == 1) .and. (jeast == mglb)) THEN
          jmin = jmin-1
          jmax = jmax+1
       ELSE
-         IF (jmin /= jwest) jmin = jmin-1
-         IF (jmax /= jeast) jmax = jmax+1
+         IF (include_all_upstream) THEN
+            jmin = jmin-1
+            jmax = jmax+1
+         ELSE
+            IF (jmin /= jwest) jmin = jmin-1
+            IF (jmax /= jeast) jmax = jmax+1
+         ENDIF
       ENDIF
+
       IF (jmin == 0)   jmin = mglb
       IF (jmax > mglb) jmax = 1
 
@@ -496,7 +515,7 @@ CONTAINS
 
       within_region = .true.
 
-      IF ((.not. strict) .and. out_of_region) THEN
+      IF ((.not. strict) .and. include_all_upstream) THEN
          RETURN
       ENDIF
 

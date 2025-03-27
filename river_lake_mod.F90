@@ -1,5 +1,7 @@
 MODULE river_lake_mod
    
+   USE hydro_data_mod
+
    integer (kind=4) :: nmouth
    integer (kind=4), allocatable :: rivermouth(:,:)
    real    (kind=4), allocatable :: upa_mouth (:)
@@ -11,6 +13,58 @@ MODULE river_lake_mod
    character(len=256) :: binfo
       
 CONTAINS
+   
+   !----------------------------------------
+   logical FUNCTION has_duplicate_mouth (i, j)
+
+      IMPLICIT NONE
+      integer, intent(in) :: i, j
+
+      integer :: iglb, jglb, iblk, jblk, iblk_, jblk_, iloc, jloc, inext, jnext
+      character(len=256) :: filename
+      integer(kind=1), allocatable :: dir  (:,:)  ! flow direction
+
+      iglb = i
+      jglb = j
+      iblk = (iglb-1)/nbox + 1
+      jblk = (jglb-1)/mbox + 1
+      iloc = iglb - (iblk-1)*nbox
+      jloc = jglb - (jblk-1)*mbox
+
+      CALL get_filename (hydro_dir, iblk, jblk, filename)
+      CALL ncio_read_serial (filename, 'dir', dir)
+
+      has_duplicate_mouth = .false.
+
+      DO WHILE ((dir(iloc,jloc) /= 0) .and. (dir(iloc,jloc) /= -1))
+
+         CALL nextij (iglb, jglb, dir(iloc,jloc), inext, jnext)
+
+         IF (on_region_boundary(inext,jnext)) THEN
+            has_duplicate_mouth = .true.
+            EXIT
+         ELSE
+            iglb = inext
+            jglb = jnext
+
+            iblk_ = (iglb-1)/nbox + 1
+            jblk_ = (jglb-1)/mbox + 1
+            IF ((iblk_ /= iblk) .or. (jblk_ /= jblk)) THEN
+               iblk = iblk_
+               jblk = jblk_
+               CALL get_filename (hydro_dir, iblk, jblk, filename)
+               CALL ncio_read_serial (filename, 'dir', dir)
+            ENDIF
+
+            iloc = iglb - (iblk-1)*nbox
+            jloc = jglb - (jblk-1)*mbox
+         ENDIF
+      ENDDO
+
+      deallocate (dir)
+
+   END FUNCTION 
+
 
    SUBROUTINE readin_rivermouth (rmfile)
 
@@ -44,7 +98,6 @@ CONTAINS
    SUBROUTINE get_next_rivermouth (catsize, catsizemin, end_of_data)
 
       USE ncio_serial
-      USE hydro_data_mod
       IMPLICIT NONE
 
       real (kind = 4), intent(in) :: catsize, catsizemin
@@ -53,8 +106,16 @@ CONTAINS
       integer(kind=1), allocatable :: dir  (:,:)  ! flow direction
       real   (kind=4), allocatable :: upa  (:,:)  ! upstream drainage area (km^2) 
 
-      character(len=256) :: filename
-      logical :: fexists
+      type mouth_node
+         integer :: i, j
+         real    :: upa
+         type(mouth_node), pointer :: next
+      END type mouth_node
+
+      type(mouth_node), pointer :: allmouth, thismouth
+
+      character(len=256) :: filename, pfmt
+      logical :: fexists, mouthfound
       integer :: idsp, jdsp, i, j, m, imouth, jmouth, inext, jnext
 
       end_of_data = .false.
@@ -95,23 +156,60 @@ CONTAINS
                CALL ncio_read_serial (filename, 'upa', upa)
 
                nmouth = 0
+                  
+               write(binfo, '(A,I2,A,I2,A)') '(',ithisblk,',',jthisblk,')'
+               write(*,'(/3A/)') 'Step 1 ', trim(binfo), &
+                  ': Finding river mouths, inland depressions and outlets on region boundaries ...'
+
+               pfmt = "('(S1) ',A,' mouth found : (',I6,',',I6,'), upa ',F8.0, A)"
+
                DO j = 1, mbox
                   DO i = 1, nbox
                      imouth = idsp + i
                      jmouth = jdsp + j
+
+                     mouthfound = .false.
                      IF (within_region(imouth, jmouth,.true.)) THEN
-                        ! river mouth and inland depression.
                         IF (dir(i,j) == 0) THEN
                            IF (upa(i,j) > catsizemin) THEN
-                              nmouth = nmouth + 1
+                              mouthfound = .true.
+                              write (*,pfmt) trim(binfo), imouth, jmouth, upa(i,j), ' river mouth.'
                            ENDIF
                         ELSEIF (dir(i,j) == -1) THEN
-                           nmouth = nmouth + 1
+                           mouthfound = .true.
+                           write (*,pfmt) trim(binfo), imouth, jmouth, upa(i,j), ' inland depression.'
                         ELSEIF (on_region_boundary(imouth,jmouth) .and. (upa(i,j) >= catsize)) THEN
                            CALL nextij (imouth, jmouth, dir(i,j), inext, jnext)
                            IF (.not. within_region(inext,jnext,.true.)) THEN
-                              nmouth = nmouth + 1
+                              IF (include_all_upstream) THEN
+                                 mouthfound = .not. has_duplicate_mouth (imouth, jmouth)
+                              ELSE
+                                 mouthfound = .true.
+                              ENDIF
+
+                              IF (mouthfound) THEN
+                                 write (*,pfmt) trim(binfo), imouth, jmouth, upa(i,j), ' region boundary.'
+                              ENDIF
                            ENDIF
+                        ENDIF
+
+                        IF (mouthfound) THEN
+
+                           nmouth = nmouth + 1
+
+                           IF (nmouth == 1) THEN
+                              allocate(allmouth)
+                              thismouth => allmouth
+                           ELSE
+                              allocate(thismouth%next)
+                              thismouth => thismouth%next
+                           ENDIF
+                           thismouth%next => null()
+
+                           thismouth%i = imouth
+                           thismouth%j = jmouth
+                           thismouth%upa = upa(i,j)
+                        
                         ENDIF
                      ENDIF
                   ENDDO
@@ -125,46 +223,19 @@ CONTAINS
                   allocate (rivermouth (2,nmouth))
                   allocate (upa_mouth    (nmouth))
 
-                  write(binfo, '(A,I2,A,I2,A)') '(',ithisblk,',',jthisblk,')'
-                  write(*,'(/3A/)') 'Step 1 ', trim(binfo), &
-                     ': Finding river mouths, inland depressions and outlets on region boundaries ...'
-
+                  thismouth => allmouth
                   m = 0
-                  DO j = 1, mbox
-                     DO i = 1, nbox
-                        imouth = idsp + i
-                        jmouth = jdsp + j
-                        IF (within_region(imouth, jmouth,.true.)) THEN
-                           ! river mouth and inland depression.
-                           IF (dir(i,j) == 0) THEN
-                              IF (upa(i,j) > catsizemin) THEN
-                                 m = m + 1
-                                 rivermouth(:,m) = (/imouth, jmouth/)
-                                 upa_mouth   (m) = upa(i,j)
-                                 write (*,97) trim(binfo), rivermouth(1,m), rivermouth(2,m), upa_mouth(m)
-                                 97 format('(S1) ',A,' mouth found : (',I6,',',I6,'), upa ',F8.0, ' river mouth.')
-                              ENDIF
-                           ELSEIF (dir(i,j) == -1) THEN
-                              m = m + 1
-                              rivermouth(:,m) = (/imouth, jmouth/)
-                              upa_mouth   (m) = upa(i,j)
-                              write (*,98) trim(binfo), rivermouth(1,m), rivermouth(2,m), upa_mouth(m)
-                              98 format('(S1) ',A,' mouth found : (',I6,',',I6,'), upa ',F8.0, ' inland depression.')
-                           ELSEIF (on_region_boundary(imouth,jmouth) .and. (upa(i,j) >= catsize)) THEN
-                              CALL nextij (imouth, jmouth, dir(i,j), inext, jnext)
-                              IF (.not. within_region(inext,jnext,.true.)) THEN
-                                 m = m + 1
-                                 rivermouth(:,m) = (/imouth, jmouth/)
-                                 upa_mouth (m)   = upa(i,j)
+                  DO WHILE (associated(thismouth))
+                     m = m + 1
+                     rivermouth(:,m) = (/thismouth%i, thismouth%j/)
+                     upa_mouth   (m) = thismouth%upa
 
-                                 write (*,99) trim(binfo), rivermouth(1,m), rivermouth(2,m), upa_mouth(m)
-                                 99 format('(S1) ',A,' mouth found : (',I6,',',I6,'), upa ',F8.0, ' region boundary.')
-                              ENDIF
-                           ENDIF
-                        ENDIF
-                     ENDDO
+                     allmouth => allmouth%next
+                     deallocate (thismouth)
+                     thismouth => allmouth
                   ENDDO
-         
+
+
                   IF (.not. firstblock) THEN
                      allocate (thisinfo%next)
                      thisinfo%next%icatdsp = thisinfo%icatdsp + thisinfo%ntotalcat
@@ -195,7 +266,6 @@ CONTAINS
    SUBROUTINE get_river_lake (catsize, catsizemin, rivermouthfile, end_of_data)
 
       USE task_mod
-      USE hydro_data_mod
       USE utils_mod
       IMPLICIT NONE
 

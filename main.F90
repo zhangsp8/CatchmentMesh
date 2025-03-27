@@ -29,7 +29,7 @@ PROGRAM main
    namelist /catexp/   &
       hydro_dir, lake_dir, output_dir, casename, storage_type, &
       catsize, lakecellsize, catsizemin, nlev_max, &
-      west, east, south, north, out_of_region
+      west, east, south, north, include_all_upstream
 
    CALL task_init  ()
 
@@ -55,20 +55,20 @@ PROGRAM main
       ENDIF
    ENDIF
 
-   CALL mpi_bcast (hydro_dir,    256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (lake_dir,     256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (output_dir,   256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (casename,     256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (storage_type, 256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (catsize,        1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (catsizemin,     1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (lakecellsize,   1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (nlev_max,       1,   MPI_INTEGER, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (west,           1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (east,           1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (south,          1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (north,          1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (out_of_region,  1,   MPI_LOGICAL, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (hydro_dir,           256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (lake_dir,            256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (output_dir,          256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (casename,            256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (storage_type,        256, MPI_CHARACTER, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (catsize,               1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (catsizemin,            1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (lakecellsize,          1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (nlev_max,              1,   MPI_INTEGER, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (west,                  1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (east,                  1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (south,                 1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (north,                 1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (include_all_upstream,  1,   MPI_LOGICAL, p_master_address, p_comm_glb, p_err)
 
    CALL mpi_bcast (has_predefined_rivermouth, 1, MPI_LOGICAL, p_master_address, p_comm_glb, p_err)
    

@@ -151,7 +151,7 @@ CONTAINS
                imax = thisinfo%bsn_nswe(2,icat) 
                jmin = thisinfo%bsn_nswe(3,icat) 
                jmax = thisinfo%bsn_nswe(4,icat) 
-                  
+
                CALL enlarge_nswe (imin, imax, jmin, jmax)
 
                np = imax - imin + 1
@@ -623,6 +623,10 @@ CONTAINS
                   ENDIF
                ENDDO
             ENDDO
+         ENDIF
+            
+         IF (.not. any(hmask .and. (hunit == -1))) THEN
+            RETURN
          ENDIF
 
          nunit = 0
