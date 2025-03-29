@@ -26,12 +26,12 @@ MODULE hydro_data_mod
       !    0: river mouth, -1: inland depression, -9: undefined (ocean)
       ! IF a flow direction file is opened as UNSIGNED integer, undefined=247 and inland depression=255
       integer(kind=1), allocatable :: dir  (:,:)  ! flow direction
-      real   (kind=4), allocatable :: upa  (:,:)  ! upstream drainage area (km^2) 
+      real   (kind=4), allocatable :: upa  (:,:)  ! upstream drainage area (km^2)
       real   (kind=4), allocatable :: elv  (:,:)  ! elevation (m)
       real   (kind=4), allocatable :: wth  (:,:)  ! river width (m)
       integer(kind=4), allocatable :: lake (:,:)  ! lake id
 
-      ! normal catchment with upstream area larger than maximum catchment size (>0); 
+      ! normal catchment with upstream area larger than maximum catchment size (>0);
       ! flow to ocean(-9); flow to inland depression(-1);
       ! flow to small river mouth (-2); flow outside the region(-3)
       integer(kind=4), allocatable :: icat (:,:)  ! catchment number
@@ -45,7 +45,7 @@ MODULE hydro_data_mod
 
    integer (kind=4) :: inorth, isouth, jwest, jeast
    logical :: include_all_upstream = .false.
-   
+
    real (kind=4) :: dlat(nglb)
    real (kind=4) :: dlon(nglb)
 
@@ -53,7 +53,7 @@ MODULE hydro_data_mod
 
       integer :: ithisblk, jthisblk
 
-      ! riv_info_pix(1:2,:) : river pixel coordinate;  
+      ! riv_info_pix(1:2,:) : river pixel coordinate;
       ! riv_info_pix(3,:)   : catchment id this pixel located in
       integer (kind=4) :: nrivpix, nrivseg
       integer (kind=4), allocatable :: riv_pix (:,:)
@@ -62,31 +62,31 @@ MODULE hydro_data_mod
       real    (kind=4), allocatable :: riv_dep (:)
 
       ! hydrounit information
-      integer (kind=4), allocatable :: bsn_num_hru(:)    
-      integer (kind=4), allocatable :: hru_indx (:,:)    
+      integer (kind=4), allocatable :: bsn_num_hru(:)
+      integer (kind=4), allocatable :: hru_indx (:,:)
       real    (kind=4), allocatable :: hru_area (:,:)
       real    (kind=4), allocatable :: hru_hand (:,:)
       real    (kind=4), allocatable :: hru_elva (:,:)
-      integer (kind=4), allocatable :: hru_next (:,:)    
+      integer (kind=4), allocatable :: hru_next (:,:)
       real    (kind=4), allocatable :: hru_plen (:,:)
       real    (kind=4), allocatable :: hru_lfac (:,:)
 
       ! basin information
       integer (kind=4) :: icatdsp
       integer (kind=4) :: ntotalcat
-      integer (kind=4), allocatable :: bsn_index      (:) 
-      integer (kind=4), allocatable :: bsn_nswe     (:,:) 
-      integer (kind=4), allocatable :: bsn_downstream (:) 
-      integer (kind=4), allocatable :: bsn_num_nbr    (:)    
-      integer (kind=4), allocatable :: bsn_idx_nbr  (:,:)    
+      integer (kind=4), allocatable :: bsn_index      (:)
+      integer (kind=4), allocatable :: bsn_nswe     (:,:)
+      integer (kind=4), allocatable :: bsn_downstream (:)
+      integer (kind=4), allocatable :: bsn_num_nbr    (:)
+      integer (kind=4), allocatable :: bsn_idx_nbr  (:,:)
       real    (kind=4), allocatable :: bsn_len_bdr  (:,:)
       real    (kind=4), allocatable :: bsn_elva       (:)
 
       ! lake information
-      integer (kind=4), allocatable :: lake_id (:)    
+      integer (kind=4), allocatable :: lake_id (:)
 
       type(info_typ), pointer :: next
-   
+
    END type info_typ
 
    type(info_typ), target  :: allinfo
@@ -96,7 +96,7 @@ CONTAINS
 
    !----------------------------------------
    SUBROUTINE get_filename (dirname, iblk, jblk, filename)
-      
+
       IMPLICIT NONE
 
       integer (kind=4), intent(in)  :: iblk, jblk
@@ -106,7 +106,7 @@ CONTAINS
       character(len=4)   :: pre2
 
       IF (iblk <= 18) THEN
-         write (pre1,'(A1,I2.2)') 'n', (18-iblk)*5     
+         write (pre1,'(A1,I2.2)') 'n', (18-iblk)*5
       ELSE
          write (pre1,'(A1,I2.2)') 's', (iblk-18)*5
       ENDIF
@@ -120,7 +120,7 @@ CONTAINS
       filename = trim(dirname) // '/' // trim(pre1) // trim(pre2) // '.nc'
 
 
-   END SUBROUTINE get_filename 
+   END SUBROUTINE get_filename
 
    !----------------------------------------
    SUBROUTINE get_region (west, east, north, south)
@@ -134,7 +134,7 @@ CONTAINS
       integer (kind=4) :: iblk, jblk
 
       IF (p_is_master) THEN
-         
+
          IF (west == east) THEN
             jwest = 1
             jeast = mglb
@@ -157,8 +157,8 @@ CONTAINS
 
          DO jblk = 1, mblock
             DO iblk = 1, nblock
-               blks(iblk,jblk)%idsp = (iblk-1)*nbox 
-               blks(iblk,jblk)%jdsp = (jblk-1)*mbox 
+               blks(iblk,jblk)%idsp = (iblk-1)*nbox
+               blks(iblk,jblk)%jdsp = (jblk-1)*mbox
                blks(iblk,jblk)%ready = .false.
             ENDDO
          ENDDO
@@ -182,7 +182,7 @@ CONTAINS
          on_region_boundary = .false.
       ENDIF
 
-   END FUNCTION 
+   END FUNCTION
 
    !----------------------------------------
    SUBROUTINE readin_blocks (iblk, jblk)
@@ -198,9 +198,9 @@ CONTAINS
 
 
       CALL get_filename (hydro_dir, iblk, jblk, filename)
-         
+
       inquire (file=trim(filename), exist=fexists)
-      IF (fexists) THEN 
+      IF (fexists) THEN
 
          CALL ncio_read_serial (filename, 'latitude',  blks(iblk,jblk)%lat)
          CALL ncio_read_serial (filename, 'longitude', blks(iblk,jblk)%lon)
@@ -212,7 +212,7 @@ CONTAINS
 
          CALL get_filename (lake_dir, iblk, jblk, lakefile)
          CALL ncio_read_serial (lakefile, 'lake', blks(iblk,jblk)%lake)
-         
+
       ELSE
 
          allocate (blks(iblk,jblk)%lat(mbox));  blks(iblk,jblk)%lat = -1.e36
@@ -223,7 +223,7 @@ CONTAINS
          allocate (blks(iblk,jblk)%elv  (nbox,mbox)); blks(iblk,jblk)%elv  = 0.
          allocate (blks(iblk,jblk)%wth  (nbox,mbox)); blks(iblk,jblk)%wth  = 0.
          allocate (blks(iblk,jblk)%lake (nbox,mbox)); blks(iblk,jblk)%lake = 0
-         
+
       ENDIF
 
       blks(iblk,jblk)%is_ocean = (.not. fexists)
@@ -236,7 +236,7 @@ CONTAINS
       ENDIF
 
       IF (load_from_file) THEN
-         
+
          CALL ncio_read_serial (filename, 'icatchment2d', blks(iblk,jblk)%icat )
          CALL ncio_read_serial (filename, 'hand',         blks(iblk,jblk)%hnd  )
          CALL ncio_read_serial (filename, 'ihydrounit2d', blks(iblk,jblk)%hunit)
@@ -254,7 +254,7 @@ CONTAINS
          ENDIF
 
          DO i = 1, nbox
-            IF ((blks(iblk,jblk)%idsp + i >= inorth) & 
+            IF ((blks(iblk,jblk)%idsp + i >= inorth) &
                .and. (blks(iblk,jblk)%idsp + i <= isouth)) THEN
 
                DO j = 1, mbox
@@ -309,7 +309,7 @@ CONTAINS
 
       DO jblk = 1, mblock
          DO iblk = 1, nblock
-            IF (blks(iblk,jblk)%ready) THEN 
+            IF (blks(iblk,jblk)%ready) THEN
 
                IF (output) THEN
 
@@ -325,7 +325,7 @@ CONTAINS
                      CALL ncio_define_dimension (filename, 'latitude',  nbox)
                      CALL ncio_define_dimension (filename, 'longitude', mbox)
                      CALL ncio_write_serial (filename, 'latitude',  blks(iblk,jblk)%lat, &
-                        'latitude' ) 
+                        'latitude' )
                      CALL ncio_write_serial (filename, 'longitude', blks(iblk,jblk)%lon, &
                         'longitude')
                      CALL ncio_write_serial (filename, 'elva', blks(iblk,jblk)%elv,  &
@@ -338,7 +338,7 @@ CONTAINS
                      'latitude', 'longitude', compress = 1)
                   CALL ncio_write_serial (filename, 'ihydrounit2d', blks(iblk,jblk)%hunit, &
                      'latitude', 'longitude', compress = 1)
-                     
+
                ENDIF
 
                deallocate (blks(iblk,jblk)%lat)
@@ -401,7 +401,7 @@ CONTAINS
       CASE (1)
          inext = i
          jnext = j + 1
-      CASE (2) 
+      CASE (2)
          inext = i + 1
          jnext = j + 1
       CASE (4)
@@ -435,7 +435,7 @@ CONTAINS
          IF (jnext > mglb) jnext = 1
       ENDIF
 
-   END SUBROUTINE nextij 
+   END SUBROUTINE nextij
 
    !----------------------------------------------
    SUBROUTINE enlarge_nswe (imin, imax, jmin, jmax)
@@ -443,7 +443,7 @@ CONTAINS
       IMPLICIT NONE
 
       integer, intent(inout) :: imin, imax, jmin, jmax
-               
+
       IF (include_all_upstream) THEN
          imin = max(imin-1, 1)
          imax = min(imax+1, nglb)
@@ -471,7 +471,7 @@ CONTAINS
    END SUBROUTINE enlarge_nswe
 
    !----------------------------------------------
-   logical FUNCTION is_feasible_step (i, j, i_dn, j_dn) 
+   logical FUNCTION is_feasible_step (i, j, i_dn, j_dn)
 
       IMPLICIT NONE
 
@@ -506,7 +506,7 @@ CONTAINS
    END FUNCTION is_feasible_step
 
    !----------------------------------------------
-   logical FUNCTION within_region (i, j, strict) 
+   logical FUNCTION within_region (i, j, strict)
 
       IMPLICIT NONE
 
@@ -538,10 +538,10 @@ CONTAINS
          ENDIF
       ENDIF
 
-   END FUNCTION within_region 
+   END FUNCTION within_region
 
    !---------------------------------------------
-   SUBROUTINE block_iterator ( & 
+   SUBROUTINE block_iterator ( &
          imin, imax, jmin, jmax, iblk, jblk, &
          i0, i1, j0, j1, il0, il1, jl0, jl1, &
          iblk1, jblk1, end_of_data)
@@ -572,8 +572,8 @@ CONTAINS
          jl1 = j1 + blks(iblk,jblk)%jdsp - jmin + 1
       ELSE
          j0  = 1
-         jl0 = j0 + blks(iblk,jblk)%jdsp + mglb - jmin + 1 
-         jl1 = j1 + blks(iblk,jblk)%jdsp + mglb - jmin + 1 
+         jl0 = j0 + blks(iblk,jblk)%jdsp + mglb - jmin + 1
+         jl1 = j1 + blks(iblk,jblk)%jdsp + mglb - jmin + 1
       ENDIF
 
       iblk1 = iblk
@@ -586,11 +586,11 @@ CONTAINS
          iblk1 = iblk1 + 1
          jblk1 = (jmin-1)/mbox + 1
       ELSE
-         end_of_data = .true. 
+         end_of_data = .true.
       ENDIF
 
    END SUBROUTINE block_iterator
-      
+
    !----------------------------------------------
    integer(kind=1) FUNCTION get_dir (i, j)
 
@@ -602,12 +602,12 @@ CONTAINS
 
       iblk = (i - 1)/nbox + 1
       jblk = (j - 1)/mbox + 1
-         
+
       IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
 
       get_dir = blks(iblk,jblk)%dir (i-blks(iblk,jblk)%idsp, j-blks(iblk,jblk)%jdsp)
 
-   END FUNCTION get_dir 
+   END FUNCTION get_dir
 
    !----------------------------------------------
    real(kind=4) FUNCTION get_upa (i, j)
@@ -656,7 +656,7 @@ CONTAINS
 
       iblk = (i - 1)/nbox + 1
       jblk = (j - 1)/mbox + 1
-      
+
       IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
 
       get_icat = blks(iblk,jblk)%icat (i-blks(iblk,jblk)%idsp, j-blks(iblk,jblk)%jdsp)
@@ -709,7 +709,7 @@ CONTAINS
       get_area = dlon(i) * dlat(i)
 
    END FUNCTION get_area
-   
+
    !----------------------------------------------
    real(kind=4) FUNCTION dist_between (i0, j0, i1, j1)
 
@@ -730,30 +730,30 @@ CONTAINS
    !------------------------------------
    SUBROUTINE aggregate_data (imin, imax, jmin, jmax, &
          np, mp, longitude, latitude, icat, dir, hnd, elv, hunit)
-      
+
       USE task_mod
       IMPLICIT NONE
-   
+
       integer (kind=4), intent(in) :: imin, imax, jmin, jmax
-         
+
       integer (kind=4), intent(in) :: np, mp
 
       real    (kind=8), intent(inout), optional :: longitude(mp)
       real    (kind=8), intent(inout), optional :: latitude (np)
-      integer (kind=4), intent(inout), optional :: icat  (np,mp)    
-      integer (kind=1), intent(inout), optional :: dir   (np,mp)    
+      integer (kind=4), intent(inout), optional :: icat  (np,mp)
+      integer (kind=1), intent(inout), optional :: dir   (np,mp)
       real    (kind=4), intent(inout), optional :: hnd   (np,mp)
       real    (kind=4), intent(inout), optional :: elv   (np,mp)
-      integer (kind=4), intent(inout), optional :: hunit (np,mp)    
-   
+      integer (kind=4), intent(inout), optional :: hunit (np,mp)
+
       integer (kind=4) :: iblk, jblk, iblk1, jblk1
       integer (kind=4) :: i0, i1, j0, j1, il0, il1, jl0, jl1
       logical :: end_of_data
-            
+
       IF (present(icat)) THEN
          icat(:,:) = -9
       ENDIF
-      
+
       iblk = (imin-1)/nbox + 1
       jblk = (jmin-1)/mbox + 1
       DO WHILE (.true.)
@@ -764,9 +764,18 @@ CONTAINS
 
          IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
 
-         IF (present(longitude))  longitude(jl0:jl1) = blks(iblk,jblk)%lon(j0:j1)
-         IF (present(latitude ))  latitude (il0:il1) = blks(iblk,jblk)%lat(i0:i1)
-         
+         IF (present(longitude)) then
+            IF (.not. any(blks(iblk,jblk)%lon(j0:j1) == -1.e36)) THEN
+               longitude(jl0:jl1) = blks(iblk,jblk)%lon(j0:j1)
+            ENDIF
+         ENDIF
+
+         IF (present(latitude )) then
+            IF (.not. any(blks(iblk,jblk)%lat(i0:i1) == -1.e36)) THEN
+               latitude (il0:il1) = blks(iblk,jblk)%lat(i0:i1)
+            ENDIF
+         ENDIF
+
          IF (present(icat))  icat (il0:il1,jl0:jl1) = blks(iblk,jblk)%icat (i0:i1,j0:j1)
          IF (present(dir))   dir  (il0:il1,jl0:jl1) = blks(iblk,jblk)%dir  (i0:i1,j0:j1)
          IF (present(hnd))   hnd  (il0:il1,jl0:jl1) = blks(iblk,jblk)%hnd  (i0:i1,j0:j1)
@@ -784,21 +793,21 @@ CONTAINS
 
    !------------------------------------
    SUBROUTINE aggregate_catch (imin, imax, jmin, jmax, np, mp, icat)
-      
+
       USE task_mod
       IMPLICIT NONE
-   
+
       integer (kind=4), intent(in) :: imin, imax, jmin, jmax
       integer (kind=4), intent(in) :: np, mp
-      integer (kind=4), intent(inout) :: icat(np,mp)    
-   
+      integer (kind=4), intent(inout) :: icat(np,mp)
+
       integer (kind=4) :: iblk, jblk, iblk1, jblk1
       integer (kind=4) :: i0, i1, j0, j1, il0, il1, jl0, jl1
       logical :: end_of_data
       character(len=256) :: filename
-            
+
       icat(:,:) = -9
-      
+
       iblk = (imin-1)/nbox + 1
       jblk = (jmin-1)/mbox + 1
       DO WHILE (.true.)
@@ -827,21 +836,21 @@ CONTAINS
    SUBROUTINE append_river (river, nriv, ij0, icatch)
 
       IMPLICIT NONE
-      
+
       integer (kind=4), intent(inout), allocatable :: river(:,:)
       integer (kind=4), intent(inout) :: nriv
       integer (kind=4), intent(in) :: ij0(2), icatch
 
       integer (kind=4) :: nsize
       integer (kind=4), allocatable :: temp(:,:)
-         
+
       nriv = nriv + 1
-      
+
       nsize = size(river,2)
       IF (nriv > nsize) THEN
          allocate (temp(3,nsize))
          temp = river
-         
+
          deallocate (river)
          allocate   (river(3,nsize+100000))
          river(:,1:nsize) = temp
@@ -853,7 +862,7 @@ CONTAINS
       river   (3,nriv) = icatch
 
    END SUBROUTINE append_river
-   
+
    !--------------------------------------------------------------
    SUBROUTINE free_memory ()
 
@@ -861,7 +870,7 @@ CONTAINS
       IMPLICIT NONE
 
       integer (kind=4) :: iblk, jblk
-                  
+
 
       DO iblk = 1, nblock
          DO jblk = 1, mblock
@@ -910,7 +919,7 @@ CONTAINS
       ENDDO
 
    END SUBROUTINE free_memory
-   
+
    !----------------------------------
    SUBROUTINE append_plist (plist, ilist, i, j, check_exist)
       IMPLICIT NONE
@@ -959,7 +968,7 @@ CONTAINS
       integer (kind=4), allocatable, intent(inout) :: plist(:,:)
       integer (kind=4), intent(inout) :: ilist
       integer (kind=4), intent(in)    :: i, j
-      
+
       real    (kind=4), allocatable, intent(inout) :: vlist(:)
       real    (kind=4), intent(in) :: val
 
@@ -984,7 +993,7 @@ CONTAINS
          plist (:,1:listsize) = temp
          deallocate (temp)
       ENDIF
-         
+
       listsize = size(vlist)
       IF (ilist > listsize) THEN
          lz = max(listsize+10, ceiling(1.2*real(listsize)))

@@ -91,6 +91,9 @@ PROGRAM main
    thisinfo%icatdsp = 0
    thisinfo%next => null()
 
+   thisinfo%ithisblk = -1
+   thisinfo%jthisblk = -1
+
    ntotalall = 0
 
    nhrumax = 1

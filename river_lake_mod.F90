@@ -125,6 +125,7 @@ CONTAINS
          IF (firstblock) THEN
             ithisblk = (inorth - 1)/nbox + 1
             jthisblk = (jwest  - 1)/mbox + 1
+            firstblock = .false.
          ELSE
             idsp = (ithisblk-1)*nbox 
             jdsp = (jthisblk-1)*mbox 
@@ -236,7 +237,7 @@ CONTAINS
                   ENDDO
 
 
-                  IF (.not. firstblock) THEN
+                  IF ((thisinfo%ithisblk /= -1) .or. (thisinfo%jthisblk /= -1)) THEN
                      allocate (thisinfo%next)
                      thisinfo%next%icatdsp = thisinfo%icatdsp + thisinfo%ntotalcat
                      thisinfo => thisinfo%next
@@ -246,16 +247,12 @@ CONTAINS
                   thisinfo%ithisblk = ithisblk
                   thisinfo%jthisblk = jthisblk
          
-                  IF (firstblock) firstblock = .false.
-               
                   EXIT
 
                ENDIF
             ENDIF
          ENDIF
       
-         IF (firstblock) firstblock = .false.
-
       ENDDO
 
       IF (allocated(dir)) deallocate(dir)
