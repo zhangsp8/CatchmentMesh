@@ -3,13 +3,13 @@ MODULE output_mod
 CONTAINS
 
    SUBROUTINE output_block_info (nhrumax)
-      
+
       USE task_mod
       USE hydro_data_mod
       USE ncio_serial
 
       IMPLICIT NONE
-   
+
       integer (kind=4), intent(in) :: nhrumax
 
       integer :: iblk, jblk
@@ -20,12 +20,12 @@ CONTAINS
 
          iblk = thisinfo%ithisblk
          jblk = thisinfo%jthisblk
-      
-         mkdirname = 'mkdir -p ' // trim(output_dir) // '/' // trim(casename)
+
+         mkdirname = 'mkdir -p ' // trim(def_output_dir) // '/' // trim(def_casename)
          CALL system(trim(mkdirname))
 
-         CALL get_filename (trim(output_dir) // '/' // trim(casename), iblk, jblk, filename)
-                  
+         CALL get_filename (trim(def_output_dir) // '/' // trim(def_casename), iblk, jblk, filename)
+
          write(*,*) 'Write block results to file ', trim(filename)
 
          inquire (file=trim(filename), exist=fexists)
@@ -35,7 +35,7 @@ CONTAINS
             CALL ncio_define_dimension (filename, 'latitude',  nbox)
             CALL ncio_define_dimension (filename, 'longitude', mbox)
             CALL ncio_write_serial (filename, 'latitude',  blks(iblk,jblk)%lat, &
-               'latitude' ) 
+               'latitude' )
             CALL ncio_write_serial (filename, 'longitude', blks(iblk,jblk)%lon, &
                'longitude')
             CALL ncio_write_serial (filename, 'elva', blks(iblk,jblk)%elv,  &
@@ -71,8 +71,8 @@ CONTAINS
 
       ENDIF
 
-   END SUBROUTINE output_block_info 
-   
+   END SUBROUTINE output_block_info
+
    SUBROUTINE output_result (nhrumax, nnbmax)
 
       USE task_mod
@@ -87,10 +87,10 @@ CONTAINS
       integer (kind=4) :: np, mp
       real    (kind=8), allocatable :: longitude(:)
       real    (kind=8), allocatable :: latitude (:)
-      integer (kind=4), allocatable :: catch (:,:)    
+      integer (kind=4), allocatable :: catch (:,:)
       real    (kind=4), allocatable :: hnd   (:,:)
       real    (kind=4), allocatable :: elv   (:,:)
-      integer (kind=4), allocatable :: hunit (:,:)    
+      integer (kind=4), allocatable :: hunit (:,:)
 
       type(info_typ) :: outinfo
 
@@ -103,10 +103,10 @@ CONTAINS
 
       IF (p_is_master) write(*,'(/A)') 'Step 5: Output results ...'
 
-         
+
       IF (p_is_master) THEN
-     
-         IF (trim(storage_type) == 'one') THEN
+
+         IF (trim(def_storage_type) == 'one') THEN
 
             ! shrink regions
             inorth = allinfo%bsn_nswe(1,1)
@@ -116,7 +116,7 @@ CONTAINS
 
             thisinfo => allinfo
             DO WHILE (associated(thisinfo))
-               
+
                DO ic = 1, thisinfo%ntotalcat
                   inorth = min     (inorth, thisinfo%bsn_nswe(1,ic))
                   isouth = max     (isouth, thisinfo%bsn_nswe(2,ic))
@@ -126,10 +126,10 @@ CONTAINS
 
                thisinfo => thisinfo%next
             ENDDO
-            
+
             write(*,*) 'region after shrink (nswe): ', inorth, isouth, jwest, jeast
 
-            filename = trim(output_dir) // '/' // trim(casename) // '.nc'
+            filename = trim(def_output_dir) // '/' // trim(def_casename) // '.nc'
 
             CALL ncio_create_file  (filename)
             CALL ncio_write_serial (filename, 'inorth', inorth)
@@ -139,7 +139,7 @@ CONTAINS
 
             np = isouth - inorth + 1
             mp = jeast  - jwest  + 1
-            IF (mp < 0) mp = mp + mglb 
+            IF (mp < 0) mp = mp + mglb
 
             allocate (latitude (np))
             allocate (longitude(mp))
@@ -148,7 +148,7 @@ CONTAINS
             allocate (elv   (np,mp))
             allocate (hunit (np,mp))
 
-            CALL aggregate_data (inorth, isouth, jwest, jeast, & 
+            CALL aggregate_data (inorth, isouth, jwest, jeast, &
                np, mp, longitude = longitude, latitude = latitude, &
                icat = catch, hnd = hnd, elv = elv, hunit = hunit)
 
@@ -156,7 +156,7 @@ CONTAINS
             CALL ncio_define_dimension (filename, 'longitude', mp)
             CALL ncio_write_serial (filename, 'latitude', latitude,  'latitude')
             CALL ncio_write_serial (filename, 'longitude', longitude, 'longitude')
-            
+
             CALL ncio_put_attr_str (filename, 'latitude', 'long_name', 'latitude')
             CALL ncio_put_attr_str (filename, 'latitude', 'units', 'degrees_north')
             CALL ncio_put_attr_str (filename, 'longitude', 'long_name', 'longitude')
@@ -184,8 +184,8 @@ CONTAINS
             thisinfo => thisinfo%next
          ENDDO
 
-         filename = trim(output_dir) // '/' // trim(casename) // '.nc'
-         IF (trim(storage_type) == 'block') THEN
+         filename = trim(def_output_dir) // '/' // trim(def_casename) // '.nc'
+         IF (trim(def_storage_type) == 'block') THEN
             CALL ncio_create_file (filename)
          ENDIF
 
@@ -234,7 +234,7 @@ CONTAINS
 
          CALL ncio_write_serial (filename, 'hydrounit_area', outinfo%hru_area, &
             'hydrounit', 'catchment', compress = 1)
-         
+
          ! ----- output : hydro unit hand -----
          allocate(outinfo%hru_hand (nhrumax, outinfo%ntotalcat)); outinfo%hru_hand(:,:) = 0.
          thisinfo => allinfo;  dsp = 0
@@ -345,7 +345,7 @@ CONTAINS
 
          CALL ncio_write_serial (filename, 'basin_downstream', outinfo%bsn_downstream, &
             'catchment', compress = 1)
-         
+
          ! ----- output : number of neighbours of a basin -----
          allocate(outinfo%bsn_num_nbr (outinfo%ntotalcat))
          thisinfo => allinfo;  dsp = 0
@@ -411,7 +411,7 @@ CONTAINS
             dsp = dsp + nthis
             thisinfo => thisinfo%next
          ENDDO
-         
+
          CALL ncio_write_serial (filename, 'lake_id', outinfo%lake_id, 'catchment', compress = 1)
 
       ENDIF
@@ -419,6 +419,6 @@ CONTAINS
       CALL mpi_barrier (p_comm_glb, p_err)
       CALL mpi_finalize(p_err)
 
-   END SUBROUTINE output_result 
+   END SUBROUTINE output_result
 
 END MODULE output_mod

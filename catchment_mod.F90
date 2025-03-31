@@ -10,7 +10,7 @@ MODULE catchment_mod
       integer (kind=4), allocatable :: lid    (:)  ! lake id
       integer (kind=4), allocatable :: nswe (:,:)  ! boundaries: north, south, west, east
       type(catinfo_typ), pointer :: next
-   END type 
+   END type
 
 CONTAINS
 
@@ -24,7 +24,7 @@ CONTAINS
 
       integer (kind=4) :: catnum, ncat, icat, i, j, i_up, j_up, idir, iblk, jblk
       integer (kind=1) :: dir_this
-      
+
       integer (kind=4) :: irivp, irivseg, tail, head
 
       integer (kind=4) :: nplist, iplist, jplist, npall
@@ -35,16 +35,16 @@ CONTAINS
 
       type(catinfo_typ), target  :: networkinfo
       type(catinfo_typ), pointer :: thislake, nextlake
-      
+
       integer (kind=4) :: south, north, west, east, cdthis
-      
+
       ! lake
       logical :: is_lake
       integer (kind=4) :: nshorecat, nc, ic, np, ip, jp
       integer (kind=4) :: outlet(2), lakeid, nplake, iplake, i_dn, j_dn, npshore
       real    (kind=4) :: shorearea
       integer (kind=4), allocatable :: lakepixels(:,:), lakeindex (:)
-      integer (kind=4), allocatable :: shoreline (:,:), shoreindex(:), thiscat(:,:) 
+      integer (kind=4), allocatable :: shoreline (:,:), shoreindex(:), thiscat(:,:)
       real    (kind=4), allocatable :: upashore(:), hndshore(:)
 
 
@@ -75,11 +75,11 @@ CONTAINS
 
                irivseg = irivseg + 1
                head = head + 1
-               
+
                is_lake = (get_lake(thisinfo%riv_pix(1,head),thisinfo%riv_pix(2,head)) > 0)
 
                IF (.not. is_lake) THEN
-               
+
                   tail = head
                   DO WHILE (head < thisinfo%nrivpix)
                      IF (thisinfo%riv_pix(3,head+1) == thisinfo%riv_pix(3,head)) THEN
@@ -118,27 +118,27 @@ CONTAINS
                         ENDDO
 
                         iplist = iplist + 1
-                     ENDDO                     
+                     ENDDO
 
                      npall = npall + nplist
 
                      catnum = thisinfo%riv_pix(3,head)
                      CALL update_catchment_pixels     (catnum, nplist, pixellist, elvdata)
                      CALL update_catchment_boundaries (nplist, pixellist, irivseg, networkinfo)
-                     
+
                      networkinfo%cid(irivseg) = catnum
                      networkinfo%lid(irivseg) = 0
 
                   ENDDO
-                     
+
                   write(*,100) trim(binfo), networkinfo%cid(irivseg), networkinfo%nswe(:,irivseg), &
                      irivseg, thisinfo%nrivseg, npall, head-tail+1
                   100 format('(S2) Catchment ',A,': ID ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
-                     ' (', I5, '/', I5, ' done), ', I10, ' Pixels, ', I5, ' Rivers') 
+                     ' (', I5, '/', I5, ' done), ', I10, ' Pixels, ', I5, ' Rivers')
 
                ELSE
                   ! lake
-                  
+
                   ! 1. lake area.
                   outlet = thisinfo%riv_pix(1:2,head)
 
@@ -164,19 +164,19 @@ CONTAINS
                      ENDDO
 
                      iplake = iplake + 1
-                  ENDDO                     
-                     
+                  ENDDO
+
                   catnum = thisinfo%riv_pix(3,head)
                   CALL update_catchment_pixels     (catnum, nplake, lakepixels, elvdata)
                   CALL update_catchment_boundaries (nplake, lakepixels, irivseg, networkinfo)
-                     
+
                   networkinfo%cid(irivseg) = catnum
                   networkinfo%lid(irivseg) = lakeid
-                  
+
                   write(*,101) trim(binfo), networkinfo%cid(irivseg), networkinfo%nswe(:,irivseg), &
                      irivseg, thisinfo%nrivseg, nplake
                   101 format('(S2) Lake      ',A,': ID ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
-                     ' (', I5, '/', I5, ' done), ', I10, ' Pixels') 
+                     ' (', I5, '/', I5, ' done), ', I10, ' Pixels')
 
                   ! 2. catchments along shore lines.
                   npshore = 0
@@ -197,7 +197,7 @@ CONTAINS
                         ENDIF
                      ENDDO
                   ENDDO
-                     
+
                   nshorecat = 0
 
                   IF (npshore > 0) THEN
@@ -222,23 +222,23 @@ CONTAINS
                         nshorecat = nshorecat + 1
                         shorearea = 0
 
-                        ip = minloc(hndshore, mask = shoreindex == -1, dim=1)                        
+                        ip = minloc(hndshore, mask = shoreindex == -1, dim=1)
                         shoreindex(ip) = 0
 
                         DO WHILE (any(shoreindex == 0))
-                           
-                           ip = minloc(hndshore, mask = shoreindex == 0, dim=1) 
+
+                           ip = minloc(hndshore, mask = shoreindex == 0, dim=1)
                            shorearea = shorearea + upashore(ip)
 
                            IF (shorearea >= catsize) THEN
-                              WHERE (shoreindex == 0) 
+                              WHERE (shoreindex == 0)
                                  shoreindex = -1
                               END WHERE
-                              
+
                               EXIT
-                              
+
                            ENDIF
-                           
+
                            shoreindex(ip) = nshorecat
 
                            DO jp = 1, npshore
@@ -269,7 +269,7 @@ CONTAINS
                   ENDIF
 
                   IF (nshorecat > 0) THEN
-                  
+
                      allocate (thislake%next)
                      thislake => thislake%next
                      thislake%next => null()
@@ -296,7 +296,7 @@ CONTAINS
 
                            CALL nextij (i_up,j_up, get_dir(i_up,j_up), i,j)
                            elv0 = get_elv(i,j)
-                                          
+
                            elv = get_elv(i_up, j_up)
                            CALL append_plist3 (pixellist, nplist, i_up, j_up, elvdata, elv-elv0)
 
@@ -319,7 +319,7 @@ CONTAINS
 
                               iplist = iplist + 1
 
-                           ENDDO                     
+                           ENDDO
                         ENDDO
 
                         catnum = thisinfo%icatdsp + ncat + ic
@@ -328,17 +328,17 @@ CONTAINS
 
                         thislake%cid(ic) = catnum
                         thislake%lid(ic) = -1
-                     
+
                         write(*,102) trim(binfo), thislake%cid(ic), thislake%nswe(:,ic), ic, nshorecat, nplist
                         102 format('(S2) LakeCat   ',A,': ID ', I7, ' (',I6,',',I6,',',I6,',', &
-                           I6,'),', ' (', I5, '/', I5, ' done), ', I10, ' Pixels') 
+                           I6,'),', ' (', I5, '/', I5, ' done), ', I10, ' Pixels')
 
                         deallocate (thiscat)
 
                      ENDDO
-                        
+
                      ncat = ncat + nshorecat
-                           
+
                      deallocate (shoreline )
                      deallocate (shoreindex)
 
@@ -356,7 +356,7 @@ CONTAINS
             allocate (thisinfo%bsn_index  (ncat))
             allocate (thisinfo%lake_id    (ncat))
             allocate (thisinfo%bsn_nswe (4,ncat))
-            
+
             thisinfo%bsn_index(1:ncat) = (/(ic, ic = 1, ncat)/) + thisinfo%icatdsp
 
             nc = size(networkinfo%cid)
@@ -367,7 +367,7 @@ CONTAINS
             thislake => networkinfo%next
             DO WHILE (associated(thislake))
                nc = size(thislake%cid)
-               
+
                thisinfo%lake_id   (ic+1:ic+nc) = thislake%lid
                thisinfo%bsn_nswe(:,ic+1:ic+nc) = thislake%nswe
 
@@ -396,7 +396,7 @@ CONTAINS
             thisinfo%bsn_downstream(:) = -9999
 
             DO icat = 1, ncat
-      
+
                catnum = icat + thisinfo%icatdsp
                north  = thisinfo%bsn_nswe(1,icat)
                south  = thisinfo%bsn_nswe(2,icat)
@@ -404,13 +404,13 @@ CONTAINS
                east   = thisinfo%bsn_nswe(4,icat)
 
                IF ((south-1)/nbox - (north-1)/nbox > 1) THEN
-                  
+
                   DO i = north, south
                      j = west
                      DO WHILE (.true.)
                         IF (get_icat(i,j) == catnum) THEN
                            dir_this = get_dir (i, j)
-                           ! 0: river mouth; -1: inland depression; 
+                           ! 0: river mouth; -1: inland depression;
                            IF ((dir_this /= 0) .and. (dir_this /= -1)) THEN
                               CALL nextij (i, j, dir_this, i_dn, j_dn)
                               IF (within_region(i_dn,j_dn,.false.)) THEN
@@ -444,7 +444,7 @@ CONTAINS
                         ENDIF
                      ENDDO
                   ENDDO
-                        
+
                ELSE
 
                   j = west
@@ -452,7 +452,7 @@ CONTAINS
                      DO i = north, south
                         IF (get_icat(i,j) == catnum) THEN
                            dir_this = get_dir (i, j)
-                           ! 0: river mouth; -1: inland depression; 
+                           ! 0: river mouth; -1: inland depression;
                            IF ((dir_this /= 0) .and. (dir_this /= -1)) THEN
                               CALL nextij (i, j, dir_this, i_dn, j_dn)
                               IF (within_region(i_dn,j_dn,.false.)) THEN
@@ -488,18 +488,18 @@ CONTAINS
                   ENDDO
 
                ENDIF
-                           
+
                write(*,103) trim(binfo), catnum, thisinfo%bsn_downstream(icat)
                103 format('(S2) Downstream ', A, ': From ', I7, ' to ', I7)
             ENDDO
-            
+
          ENDIF
-            
+
          thisinfo%ntotalcat = ncat
-                  
+
       ENDIF
 
-   END SUBROUTINE get_catchment 
+   END SUBROUTINE get_catchment
 
 
    SUBROUTINE update_catchment_pixels (catnum, np, pixellist, elvdata)
@@ -516,7 +516,7 @@ CONTAINS
       DO ip = 1, np
          iblk = (pixellist(1,ip)-1)/nbox + 1
          jblk = (pixellist(2,ip)-1)/mbox + 1
-         
+
          IF (.not. blks(iblk,jblk)%ready)  CALL readin_blocks(iblk, jblk)
 
          i = pixellist(1,ip) - blks(iblk,jblk)%idsp

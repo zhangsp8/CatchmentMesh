@@ -13,7 +13,7 @@ CONTAINS
       integer (kind=4), intent(out) :: nnbmax
 
       ! Local Variables
-      integer (kind=4), allocatable :: catch (:,:)    
+      integer (kind=4), allocatable :: catch (:,:)
 
       integer (kind=4) :: numblocks, ntotalcat, iblk, jblk
       integer (kind=4) :: catnum, imin, imax, jmin, jmax, icat, jcat, np, mp
@@ -46,7 +46,7 @@ CONTAINS
             numblocks = numblocks + 1
             thisinfo => thisinfo%next
          ENDDO
-   
+
          CALL mpi_bcast (numblocks, 1, MPI_INTEGER, p_master_address, p_comm_glb, p_err)
 
          nnbmax = 0
@@ -78,7 +78,7 @@ CONTAINS
                      CALL mpi_recv (bsn_nbr(jcat)%nbr_index, nnb, MPI_INTEGER, iwork, 2, p_comm_glb, p_stat, p_err)
                      CALL mpi_recv (bsn_nbr(jcat)%lenborder, nnb, MPI_REAL4  , iwork, 2, p_comm_glb, p_stat, p_err)
                   ENDIF
-                     
+
                   nnbmax = max(nnb, nnbmax)
 
                ENDIF
@@ -87,15 +87,15 @@ CONTAINS
 
                   catnum = thisinfo%icatdsp+icat
 
-                  CALL mpi_send (catnum, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err) 
-               
-                  imin = thisinfo%bsn_nswe(1,icat) 
-                  imax = thisinfo%bsn_nswe(2,icat) 
-                  jmin = thisinfo%bsn_nswe(3,icat) 
-                  jmax = thisinfo%bsn_nswe(4,icat) 
+                  CALL mpi_send (catnum, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err)
+
+                  imin = thisinfo%bsn_nswe(1,icat)
+                  imax = thisinfo%bsn_nswe(2,icat)
+                  jmin = thisinfo%bsn_nswe(3,icat)
+                  jmax = thisinfo%bsn_nswe(4,icat)
 
                   CALL enlarge_nswe (imin, imax, jmin, jmax)
-               
+
                   np = imax - imin + 1
                   mp = jmax - jmin + 1
                   IF (mp < 0) mp = mp + mglb
@@ -105,15 +105,15 @@ CONTAINS
                   CALL aggregate_catch (imin, imax, jmin, jmax, np, mp, catch)
 
                   mesg(1:4) = (/imin, jmin, np, mp/)
-                  CALL mpi_send (mesg(1:4), 4, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
-                  CALL mpi_send (catch, np*mp, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
-                  
+                  CALL mpi_send (mesg(1:4), 4, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err)
+                  CALL mpi_send (catch, np*mp, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err)
+
                   deallocate (catch)
 
                   icat = icat + 1
                ELSE
                   zero = 0
-                  CALL mpi_send (zero, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (zero, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err)
                   ndone = ndone + 1
                ENDIF
 
@@ -125,10 +125,10 @@ CONTAINS
             allocate (thisinfo%bsn_len_bdr (nnbmax,ntotalcat));   thisinfo%bsn_len_bdr(:,:) = 0
 
             DO icat = 1, ntotalcat
-               thisinfo%bsn_num_nbr(icat) = bsn_nbr(icat)%nnb 
+               thisinfo%bsn_num_nbr(icat) = bsn_nbr(icat)%nnb
                IF (bsn_nbr(icat)%nnb > 0) THEN
-                  thisinfo%bsn_idx_nbr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%nbr_index 
-                  thisinfo%bsn_len_bdr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%lenborder 
+                  thisinfo%bsn_idx_nbr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%nbr_index
+                  thisinfo%bsn_len_bdr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%lenborder
                ENDIF
             ENDDO
 
@@ -140,7 +140,7 @@ CONTAINS
             ENDDO
             deallocate (bsn_nbr)
 
-            IF (trim(storage_type) == 'block') THEN
+            IF (trim(def_storage_type) == 'block') THEN
                DO jblk = 1, mblock
                   DO iblk = 1, nblock
                      IF (allocated(blks(iblk,jblk)%icat)) THEN
@@ -151,7 +151,7 @@ CONTAINS
             ENDIF
 
             CALL mpi_barrier (p_comm_glb, p_err)
-         
+
             IF (associated(thisinfo%next)) THEN
                thisinfo => thisinfo%next
             ELSE
@@ -167,7 +167,7 @@ CONTAINS
          DO WHILE (numblocks > 0)
 
             mesg(1:2) = (/p_iam_glb, -1/)
-            CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err) 
+            CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err)
 
             DO WHILE (.true.)
 
@@ -183,7 +183,7 @@ CONTAINS
                mp   = mesg(4)
 
                allocate (catch (np,mp))
-               
+
                CALL mpi_recv (catch, np*mp, MPI_INTEGER,  p_master_address, 1, p_comm_glb, p_stat, p_err)
 
                nnb = 0
@@ -250,12 +250,12 @@ CONTAINS
                ENDIF
 
                mesg(1:2) = (/p_iam_glb, catnum/)
-               CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err) 
+               CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err)
 
-               CALL mpi_send (nnb, 1, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err) 
+               CALL mpi_send (nnb, 1, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err)
                IF (nnb > 0) THEN
-                  CALL mpi_send (nbindex  (1:nnb), nnb, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err) 
-                  CALL mpi_send (lenborder(1:nnb), nnb, MPI_REAL4  , p_master_address, 2, p_comm_glb, p_err) 
+                  CALL mpi_send (nbindex  (1:nnb), nnb, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err)
+                  CALL mpi_send (lenborder(1:nnb), nnb, MPI_REAL4  , p_master_address, 2, p_comm_glb, p_err)
                ENDIF
 
                deallocate (catch)

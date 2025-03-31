@@ -16,14 +16,14 @@ CONTAINS
       integer (kind=4), intent(out) :: maxnnb
 
       ! Local Variables
-      real    (kind=8), allocatable :: longitude(:)    
-      real    (kind=8), allocatable :: latitude (:)    
+      real    (kind=8), allocatable :: longitude(:)
+      real    (kind=8), allocatable :: latitude (:)
 
-      integer (kind=4), allocatable :: catch (:,:)    
-      integer (kind=1), allocatable :: dir   (:,:)    
+      integer (kind=4), allocatable :: catch (:,:)
+      integer (kind=1), allocatable :: dir   (:,:)
       real    (kind=4), allocatable :: hnd   (:,:)
       real    (kind=4), allocatable :: elv   (:,:)
-      integer (kind=4), allocatable :: hunit (:,:)    
+      integer (kind=4), allocatable :: hunit (:,:)
       logical, allocatable :: hmask (:,:)
 
       integer (kind=4) :: numblocks, ntotalcat
@@ -33,19 +33,19 @@ CONTAINS
       integer (kind=4) :: i, j, inext, jnext
       integer (kind=4) :: ilat, jlon, ilat0, jlon0, ilat1, jlon1
 
-      integer (kind=4), allocatable :: indxhu (:)    
+      integer (kind=4), allocatable :: indxhu (:)
       real    (kind=4), allocatable :: areahu (:)
-      integer (kind=4), allocatable :: npxlhu (:)    
+      integer (kind=4), allocatable :: npxlhu (:)
       real    (kind=4), allocatable :: handhu (:)
       real    (kind=4), allocatable :: elvahu (:)
-      integer (kind=4), allocatable :: nexthu (:)    
+      integer (kind=4), allocatable :: nexthu (:)
       real    (kind=4), allocatable :: plenhu (:)
       real    (kind=4), allocatable :: lfachu (:)
       logical, allocatable :: mask (:)
 
       real    (kind=4) :: elvacat
 
-      integer (kind=4), allocatable :: route (:,:)    
+      integer (kind=4), allocatable :: route (:,:)
       real    (kind=4), allocatable :: hdnxt (:,:)
       real    (kind=4), allocatable :: plen2 (:,:)
 
@@ -87,7 +87,7 @@ CONTAINS
             numblocks = numblocks + 1
             thisinfo => thisinfo%next
          ENDDO
-   
+
          CALL mpi_bcast (numblocks, 1, MPI_INTEGER, p_master_address, p_comm_glb, p_err)
 
          maxnnb = 0
@@ -164,13 +164,13 @@ CONTAINS
 
                   catnum = thisinfo%icatdsp+icat
 
-                  CALL mpi_send (catnum, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err) 
-               
-                  imin = thisinfo%bsn_nswe(1,icat) 
-                  imax = thisinfo%bsn_nswe(2,icat) 
-                  jmin = thisinfo%bsn_nswe(3,icat) 
-                  jmax = thisinfo%bsn_nswe(4,icat) 
-               
+                  CALL mpi_send (catnum, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err)
+
+                  imin = thisinfo%bsn_nswe(1,icat)
+                  imax = thisinfo%bsn_nswe(2,icat)
+                  jmin = thisinfo%bsn_nswe(3,icat)
+                  jmax = thisinfo%bsn_nswe(4,icat)
+
                   imin = max(imin-1, inorth)
                   imax = min(imax+1, isouth)
 
@@ -198,16 +198,16 @@ CONTAINS
                      icat = catch, dir = dir, hnd = hnd, elv = elv, hunit = hunit)
 
                   mesg(1:5) = (/thisinfo%lake_id (icat), imin, jmin, np, mp/)
-                  CALL mpi_send (mesg(1:5), 5, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
-                  CALL mpi_send (catch, np*mp, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
-                  CALL mpi_send (dir,   np*mp, MPI_INTEGER1, iwork, 1, p_comm_glb, p_err) 
-                  CALL mpi_send (hnd,   np*mp, MPI_REAL4,    iwork, 1, p_comm_glb, p_err) 
-                  CALL mpi_send (elv,   np*mp, MPI_REAL4,    iwork, 1, p_comm_glb, p_err) 
-                  CALL mpi_send (hunit, np*mp, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (mesg(1:5), 5, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err)
+                  CALL mpi_send (catch, np*mp, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err)
+                  CALL mpi_send (dir,   np*mp, MPI_INTEGER1, iwork, 1, p_comm_glb, p_err)
+                  CALL mpi_send (hnd,   np*mp, MPI_REAL4,    iwork, 1, p_comm_glb, p_err)
+                  CALL mpi_send (elv,   np*mp, MPI_REAL4,    iwork, 1, p_comm_glb, p_err)
+                  CALL mpi_send (hunit, np*mp, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err)
 
                   write(*,100) catnum, ntotalall
-                  100 format('(S4) Catchment information, ID (', I10, '/', I10, ') in progress.') 
-                  
+                  100 format('(S4) Catchment information, ID (', I10, '/', I10, ') in progress.')
+
                   deallocate (catch)
                   deallocate (dir  )
                   deallocate (hnd  )
@@ -217,7 +217,7 @@ CONTAINS
                   icat = icat + 1
                ELSE
                   zero = 0
-                  CALL mpi_send (zero, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (zero, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err)
                   ndone = ndone + 1
                ENDIF
 
@@ -232,10 +232,10 @@ CONTAINS
             thisinfo%bsn_len_bdr(:,:) = 0
 
             DO icat = 1, ntotalcat
-               thisinfo%bsn_num_nbr(icat) = bsn_nbr(icat)%nnb 
+               thisinfo%bsn_num_nbr(icat) = bsn_nbr(icat)%nnb
                IF (bsn_nbr(icat)%nnb > 0) THEN
-                  thisinfo%bsn_idx_nbr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%nbr_index 
-                  thisinfo%bsn_len_bdr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%lenborder 
+                  thisinfo%bsn_idx_nbr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%nbr_index
+                  thisinfo%bsn_len_bdr(1:bsn_nbr(icat)%nnb,icat) = bsn_nbr(icat)%lenborder
                ENDIF
             ENDDO
 
@@ -252,7 +252,7 @@ CONTAINS
             ENDIF
 
             CALL mpi_barrier (p_comm_glb, p_err)
-         
+
             IF (associated(thisinfo%next)) THEN
                thisinfo => thisinfo%next
             ELSE
@@ -268,7 +268,7 @@ CONTAINS
          DO WHILE (numblocks > 0)
 
             mesg(1:2) = (/p_iam_glb, -1/)
-            CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err) 
+            CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err)
 
             DO WHILE (.true.)
 
@@ -289,7 +289,7 @@ CONTAINS
                allocate (hnd   (np,mp))
                allocate (elv   (np,mp))
                allocate (hunit (np,mp))
-               
+
                CALL mpi_recv (catch, np*mp, MPI_INTEGER,  p_master_address, 1, p_comm_glb, p_stat, p_err)
                CALL mpi_recv (dir,   np*mp, MPI_INTEGER1, p_master_address, 1, p_comm_glb, p_stat, p_err)
                CALL mpi_recv (hnd,   np*mp, MPI_REAL4,    p_master_address, 1, p_comm_glb, p_stat, p_err)
@@ -297,7 +297,7 @@ CONTAINS
                CALL mpi_recv (hunit, np*mp, MPI_INTEGER,  p_master_address, 1, p_comm_glb, p_stat, p_err)
 
                allocate (hmask (np,mp))
-               hmask = (catch == catnum) 
+               hmask = (catch == catnum)
                maxnum = maxval(hunit,mask=hmask)
 
                allocate (npxlhu (0:maxnum));  npxlhu(:) = 0
@@ -327,8 +327,8 @@ CONTAINS
                   handhu(:) = 0
                   elvahu(:) = 0
                   nexthu(:) = -1
-                  plenhu(:) = 0 
-                  lfachu(:) = 0 
+                  plenhu(:) = 0
+                  lfachu(:) = 0
 
                   allocate (route (2,np*mp))
                   allocate (hdnxt (np,mp))
@@ -410,7 +410,7 @@ CONTAINS
                                     ENDIF
                                  ENDIF
 
-                                 IF ((dir(i,j) == 1) .or. (dir(i,j) == 16)) THEN 
+                                 IF ((dir(i,j) == 1) .or. (dir(i,j) == 16)) THEN
                                     lfachu(unum) = lfachu(unum) + dlon(i+imin-1)
                                  ELSEIF ((dir(i,j) == 4) .or. (dir(i,j) == 64)) THEN
                                     lfachu(unum) = lfachu(unum) + dlat(i+imin-1)
@@ -429,7 +429,7 @@ CONTAINS
                      handhu = handhu / npxlhu
                      elvahu = elvahu / npxlhu
                      plenhu = plenhu / npxlhu
-                  endwhere 
+                  endwhere
 
                   IF (count(nexthu == -2) > 1) THEN
                      write(*,*) 'Warning: more than one lowest hydro unit in ', catnum, imin, imax, jmin, jmax
@@ -446,9 +446,9 @@ CONTAINS
                   nnb, nbindex, lenborder)
 
                mesg(1:2) = (/p_iam_glb, catnum/)
-               CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_glb, p_err) 
+               CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, 0, 0, p_comm_glb, p_err)
 
-               CALL mpi_send (nu, 1, MPI_INTEGER, 0, 1, p_comm_glb, p_err) 
+               CALL mpi_send (nu, 1, MPI_INTEGER, 0, 1, p_comm_glb, p_err)
 
                IF (lakeid <= 0) THEN
 
@@ -461,34 +461,34 @@ CONTAINS
                   allocate (datai (nusend))
 
                   datai(1:nusend) = pack( (/(i,i=0,maxnum)/), mask)
-                  CALL mpi_send (datai(1:nusend), nusend, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (datai(1:nusend), nusend, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err)
 
                   datar(1:nusend) = pack(areahu, mask)
-                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err)
 
                   datai(1:nusend) = pack(nexthu, mask)
-                  CALL mpi_send (datai(1:nusend), nusend, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (datai(1:nusend), nusend, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err)
 
                   datar(1:nusend) = pack(handhu, mask)
-                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err)
 
                   datar(1:nusend) = pack(elvahu, mask)
-                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err)
 
                   datar(1:nusend) = pack(plenhu, mask)
-                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err)
 
                   datar(1:nusend) = pack(lfachu, mask)
-                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (datar(1:nusend), nusend, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err)
 
                ENDIF
 
-               CALL mpi_send (elvacat, 1, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err) 
+               CALL mpi_send (elvacat, 1, MPI_REAL4, p_master_address, 1, p_comm_glb, p_err)
 
-               CALL mpi_send (nnb, 1, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err) 
+               CALL mpi_send (nnb, 1, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err)
                IF (nnb > 0) THEN
-                  CALL mpi_send (nbindex  (1:nnb), nnb, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err) 
-                  CALL mpi_send (lenborder(1:nnb), nnb, MPI_REAL4  , p_master_address, 1, p_comm_glb, p_err) 
+                  CALL mpi_send (nbindex  (1:nnb), nnb, MPI_INTEGER, p_master_address, 1, p_comm_glb, p_err)
+                  CALL mpi_send (lenborder(1:nnb), nnb, MPI_REAL4  , p_master_address, 1, p_comm_glb, p_err)
                ENDIF
 
                IF (allocated (catch)    ) deallocate (catch)

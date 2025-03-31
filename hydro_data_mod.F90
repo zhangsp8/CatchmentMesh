@@ -10,8 +10,8 @@ MODULE hydro_data_mod
    integer (kind=4), parameter :: nblock = 36
    integer (kind=4), parameter :: mblock = 72
 
-   character(len=256) :: hydro_dir, lake_dir
-   character(len=256) :: output_dir, casename, storage_type
+   character(len=256) :: def_hydro_dir,  def_lake_dir
+   character(len=256) :: def_output_dir, def_casename, def_storage_type
 
    type block_typ
 
@@ -44,7 +44,7 @@ MODULE hydro_data_mod
    type (block_typ) :: blks (nblock,mblock)
 
    integer (kind=4) :: inorth, isouth, jwest, jeast
-   logical :: include_all_upstream = .false.
+   logical :: def_include_all_upstream = .false.
 
    real (kind=4) :: dlat(nglb)
    real (kind=4) :: dlon(nglb)
@@ -197,7 +197,7 @@ CONTAINS
       logical :: fexists, load_from_file
 
 
-      CALL get_filename (hydro_dir, iblk, jblk, filename)
+      CALL get_filename (def_hydro_dir, iblk, jblk, filename)
 
       inquire (file=trim(filename), exist=fexists)
       IF (fexists) THEN
@@ -210,7 +210,7 @@ CONTAINS
          CALL ncio_read_serial (filename, 'elv', blks(iblk,jblk)%elv)
          CALL ncio_read_serial (filename, 'wth', blks(iblk,jblk)%wth)
 
-         CALL get_filename (lake_dir, iblk, jblk, lakefile)
+         CALL get_filename (def_lake_dir, iblk, jblk, lakefile)
          CALL ncio_read_serial (lakefile, 'lake', blks(iblk,jblk)%lake)
 
       ELSE
@@ -228,8 +228,8 @@ CONTAINS
 
       blks(iblk,jblk)%is_ocean = (.not. fexists)
 
-      IF (trim(storage_type) == 'block') THEN
-         CALL get_filename (trim(output_dir) // '/' // trim(casename), iblk, jblk, filename)
+      IF (trim(def_storage_type) == 'block') THEN
+         CALL get_filename (trim(def_output_dir) // '/' // trim(def_casename), iblk, jblk, filename)
          inquire (file=trim(filename), exist=load_from_file)
       ELSE
          load_from_file = .false.
@@ -247,7 +247,7 @@ CONTAINS
          allocate (blks(iblk,jblk)%icat (nbox,mbox))
          allocate (blks(iblk,jblk)%hunit(nbox,mbox))
 
-         IF (include_all_upstream) THEN
+         IF (def_include_all_upstream) THEN
             blks(iblk,jblk)%icat  = 0
          ELSE
             blks(iblk,jblk)%icat  = -3
@@ -304,7 +304,7 @@ CONTAINS
       logical :: fexists
       character(len=256) :: mkdirname, filename
 
-      mkdirname = 'mkdir -p ' // trim(output_dir) // '/' // trim(casename)
+      mkdirname = 'mkdir -p ' // trim(def_output_dir) // '/' // trim(def_casename)
       CALL system(trim(mkdirname))
 
       DO jblk = 1, mblock
@@ -313,7 +313,7 @@ CONTAINS
 
                IF (output) THEN
 
-                  CALL get_filename (trim(output_dir) // '/' // trim(casename), &
+                  CALL get_filename (trim(def_output_dir) // '/' // trim(def_casename), &
                      iblk, jblk, filename)
 
                   write(*,*) 'Write cache data to file ', trim(filename)
@@ -444,7 +444,7 @@ CONTAINS
 
       integer, intent(inout) :: imin, imax, jmin, jmax
 
-      IF (include_all_upstream) THEN
+      IF (def_include_all_upstream) THEN
          imin = max(imin-1, 1)
          imax = min(imax+1, nglb)
       ELSE
@@ -456,7 +456,7 @@ CONTAINS
          jmin = jmin-1
          jmax = jmax+1
       ELSE
-         IF (include_all_upstream) THEN
+         IF (def_include_all_upstream) THEN
             jmin = jmin-1
             jmax = jmax+1
          ELSE
@@ -515,7 +515,7 @@ CONTAINS
 
       within_region = .true.
 
-      IF ((.not. strict) .and. include_all_upstream) THEN
+      IF ((.not. strict) .and. def_include_all_upstream) THEN
          RETURN
       ENDIF
 
@@ -817,7 +817,7 @@ CONTAINS
             iblk1, jblk1, end_of_data)
 
          IF (.not. allocated(blks(iblk,jblk)%icat)) THEN
-            CALL get_filename (trim(output_dir) // '/' // trim(casename), iblk, jblk, filename)
+            CALL get_filename (trim(def_output_dir) // '/' // trim(def_casename), iblk, jblk, filename)
             CALL ncio_read_serial (filename, 'icatchment2d', blks(iblk,jblk)%icat )
          ENDIF
 
