@@ -4,7 +4,7 @@ MODULE hillslope_mod
 
 CONTAINS
 
-   SUBROUTINE get_hillslope_hydrounits (catsize, lakecellsize, nlev_max, nhrumax)
+   SUBROUTINE get_hillslope_hydrounits (catsize, lakecellsize, nlev_max, nstep, nhrumax)
 
       USE task_mod
       USE utils_mod
@@ -12,55 +12,59 @@ CONTAINS
 
       IMPLICIT NONE
 
-      real    (kind=4), intent(in)    :: catsize
-      real    (kind=4), intent(in)    :: lakecellsize
-      integer (kind=4), intent(in)    :: nlev_max
+      real    (kind=4), intent(in) :: catsize
+      real    (kind=4), intent(in) :: lakecellsize
+      integer (kind=4), intent(in) :: nlev_max
+      integer (kind=4), intent(in) :: nstep
+
       integer (kind=4), intent(inout) :: nhrumax
 
       ! local
-      integer (kind=4), allocatable :: catch (:,:)    
-      integer (kind=1), allocatable :: dir   (:,:)    
+      integer (kind=4), allocatable :: catch (:,:)
+      integer (kind=1), allocatable :: dir   (:,:)
       real    (kind=4), allocatable :: hnd   (:,:)
       real    (kind=4), allocatable :: elv   (:,:)
       real    (kind=4), allocatable :: area  (:,:)
-      integer (kind=4), allocatable :: hunit (:,:)    
+      integer (kind=4), allocatable :: hunit (:,:)
       logical, allocatable :: hmask (:,:)
-      
-      integer (kind=4), allocatable :: indxhu (:)    
+
+      integer (kind=4), allocatable :: indxhu (:)
       real    (kind=4), allocatable :: areahu (:)
-      integer (kind=4), allocatable :: npxlhu (:)    
+      integer (kind=4), allocatable :: npxlhu (:)
       real    (kind=4), allocatable :: handhu (:)
       real    (kind=4), allocatable :: elvahu (:)
-      integer (kind=4), allocatable :: nexthu (:)    
+      integer (kind=4), allocatable :: nexthu (:)
       real    (kind=4), allocatable :: plenhu (:)
       real    (kind=4), allocatable :: lfachu (:)
-      
-      real    (kind=4), allocatable :: datar (:)
-      integer (kind=4), allocatable :: datai (:)    
-      
-      integer (kind=4), allocatable :: route (:,:)    
+
+      real    (kind=4), allocatable :: hdpix  (:)
+      integer (kind=4), allocatable :: order  (:)
+      real    (kind=4), allocatable :: fdstep (:,:)
+
+      integer (kind=4), allocatable :: route (:,:)
       real    (kind=4), allocatable :: hdnxt (:,:)
       real    (kind=4), allocatable :: plen2 (:,:)
 
       real    (kind=4) :: levsize, elvacat, dist
-      integer (kind=4) :: ntotalcat, icat, jcat, nhru, maxnum, unum
+      integer (kind=4) :: ntotalcat, icat, jcat, nhru, maxnum, minnum, unum
       integer (kind=4) :: catnum, lakeid, imin, imax, jmin, jmax, ilat0, ilat1, jlon0, jlon1
       integer (kind=4) :: np, mp, ip, jp, i, j, iblk, jblk, jlon, nnode, inode, inext, jnext
+      integer (kind=4) :: npxl, iu, is
       integer (kind=4) :: iwork, mesg(5), zero, errorcode
-      logical, allocatable :: mask(:)
-   
+
       type hru_typ
          ! hydrounit information
          integer :: nhru
-         integer (kind=4), allocatable :: indx (:)    
+         integer (kind=4), allocatable :: indx (:)
          real    (kind=4), allocatable :: area (:)
          real    (kind=4), allocatable :: hand (:)
          real    (kind=4), allocatable :: elva (:)
-         integer (kind=4), allocatable :: next (:)    
+         integer (kind=4), allocatable :: next (:)
          real    (kind=4), allocatable :: plen (:)
          real    (kind=4), allocatable :: lfac (:)
+         real    (kind=4), allocatable :: fdstep (:,:)
       END type hru_typ
-      
+
       type(hru_typ), allocatable :: hruall (:)
 
 
@@ -68,14 +72,14 @@ CONTAINS
       IF (p_is_master) THEN
 
          write(*,'(/3A/)') 'Step 3 ',trim(binfo),': Finding all hillslope units and lake elements ...'
-            
+
          ntotalcat = thisinfo%ntotalcat
-            
+
          allocate (hruall (ntotalcat))
          allocate (thisinfo%bsn_elva (ntotalcat))
 
          DO icat = 1, thisinfo%ntotalcat + p_nwork
-            
+
             CALL mpi_recv (mesg(1:2), 2, MPI_INTEGER, MPI_ANY_SOURCE, 0, p_comm_glb, p_stat, p_err)
 
             iwork  = mesg(1)
@@ -85,17 +89,17 @@ CONTAINS
 
                jcat = catnum - thisinfo%icatdsp
 
-               imin = thisinfo%bsn_nswe(1,jcat) 
-               imax = thisinfo%bsn_nswe(2,jcat) 
-               jmin = thisinfo%bsn_nswe(3,jcat) 
-               jmax = thisinfo%bsn_nswe(4,jcat) 
-               
+               imin = thisinfo%bsn_nswe(1,jcat)
+               imax = thisinfo%bsn_nswe(2,jcat)
+               jmin = thisinfo%bsn_nswe(3,jcat)
+               jmax = thisinfo%bsn_nswe(4,jcat)
+
                CALL enlarge_nswe (imin, imax, jmin, jmax)
 
                np = imax - imin + 1
                mp = jmax - jmin + 1
                IF (mp < 0) mp = mp + mglb
-            
+
                allocate (hunit (np,mp))
 
                CALL mpi_recv (hunit, np*mp, MPI_INTEGER, iwork, 2, p_comm_glb, p_stat, p_err)
@@ -103,9 +107,9 @@ CONTAINS
                CALL mpi_recv (nhru, 1, MPI_INTEGER, iwork, 2, p_comm_glb, p_stat, p_err)
 
                hruall(jcat)%nhru = nhru
-                  
+
                IF (thisinfo%lake_id(jcat) <= 0) THEN
-               
+
                   allocate (hruall(jcat)%indx (nhru));  hruall(jcat)%indx = -1
                   allocate (hruall(jcat)%area (nhru));  hruall(jcat)%area = 0
                   allocate (hruall(jcat)%next (nhru));  hruall(jcat)%next = -1
@@ -114,6 +118,8 @@ CONTAINS
                   allocate (hruall(jcat)%plen (nhru));  hruall(jcat)%plen = -1
                   allocate (hruall(jcat)%lfac (nhru));  hruall(jcat)%lfac = 0.
 
+                  allocate (hruall(jcat)%fdstep (nstep, nhru));  hruall(jcat)%fdstep = 0.
+
                   CALL mpi_recv (hruall(jcat)%indx, nhru, MPI_INTEGER, iwork, 2, p_comm_glb, p_stat, p_err)
                   CALL mpi_recv (hruall(jcat)%area, nhru, MPI_REAL4,   iwork, 2, p_comm_glb, p_stat, p_err)
                   CALL mpi_recv (hruall(jcat)%next, nhru, MPI_INTEGER, iwork, 2, p_comm_glb, p_stat, p_err)
@@ -121,6 +127,8 @@ CONTAINS
                   CALL mpi_recv (hruall(jcat)%elva, nhru, MPI_REAL4,   iwork, 2, p_comm_glb, p_stat, p_err)
                   CALL mpi_recv (hruall(jcat)%plen, nhru, MPI_REAL4,   iwork, 2, p_comm_glb, p_stat, p_err)
                   CALL mpi_recv (hruall(jcat)%lfac, nhru, MPI_REAL4,   iwork, 2, p_comm_glb, p_stat, p_err)
+
+                  CALL mpi_recv (hruall(jcat)%fdstep, nstep*nhru, MPI_REAL4, iwork, 2, p_comm_glb, p_stat, p_err)
 
                ENDIF
 
@@ -132,7 +140,7 @@ CONTAINS
                      jblk = mod(jmin+jp-2,mglb)/mbox + 1
                      i = mod(imin-1+ip-1,nbox) + 1
                      j = mod(jmin-1+jp-1,mbox) + 1
-                     
+
                      IF (blks(iblk,jblk)%icat(i,j) == catnum) THEN
 
                         blks(iblk,jblk)%hunit(i,j) = hunit(ip,jp)
@@ -146,11 +154,11 @@ CONTAINS
             ENDIF
 
             IF (icat <= thisinfo%ntotalcat) THEN
-               
-               imin = thisinfo%bsn_nswe(1,icat) 
-               imax = thisinfo%bsn_nswe(2,icat) 
-               jmin = thisinfo%bsn_nswe(3,icat) 
-               jmax = thisinfo%bsn_nswe(4,icat) 
+
+               imin = thisinfo%bsn_nswe(1,icat)
+               imax = thisinfo%bsn_nswe(2,icat)
+               jmin = thisinfo%bsn_nswe(3,icat)
+               jmax = thisinfo%bsn_nswe(4,icat)
 
                CALL enlarge_nswe (imin, imax, jmin, jmax)
 
@@ -165,20 +173,20 @@ CONTAINS
 
                CALL aggregate_data (imin, imax, jmin, jmax, np, mp, &
                   icat = catch, dir = dir, hnd = hnd, elv = elv)
-               
+
                catnum = icat + thisinfo%icatdsp
-               CALL mpi_send (catnum, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err) 
-               
+               CALL mpi_send (catnum, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err)
+
                mesg(1:5) = (/thisinfo%lake_id(icat), imin, jmin, np, mp/)
-               CALL mpi_send (mesg(1:5), 5, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
-               CALL mpi_send (catch, np*mp, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err) 
-               CALL mpi_send (dir,   np*mp, MPI_INTEGER1, iwork, 1, p_comm_glb, p_err) 
-               CALL mpi_send (hnd,   np*mp, MPI_REAL4,    iwork, 1, p_comm_glb, p_err) 
-               CALL mpi_send (elv,   np*mp, MPI_REAL4,    iwork, 1, p_comm_glb, p_err) 
+               CALL mpi_send (mesg(1:5), 5, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err)
+               CALL mpi_send (catch, np*mp, MPI_INTEGER,  iwork, 1, p_comm_glb, p_err)
+               CALL mpi_send (dir,   np*mp, MPI_INTEGER1, iwork, 1, p_comm_glb, p_err)
+               CALL mpi_send (hnd,   np*mp, MPI_REAL4,    iwork, 1, p_comm_glb, p_err)
+               CALL mpi_send (elv,   np*mp, MPI_REAL4,    iwork, 1, p_comm_glb, p_err)
 
                write(*,100) trim(binfo), catnum, thisinfo%bsn_nswe(:,icat), icat, thisinfo%ntotalcat
                100 format('(S3) Hillslopes and Lake Elements ',A,': ', I7, ' (',I6,',',I6,',',I6,',',I6,'),', &
-                  '(', I8, '/', I8, ') in progress.') 
+                  '(', I8, '/', I8, ') in progress.')
 
                deallocate (catch)
                deallocate (dir  )
@@ -187,11 +195,11 @@ CONTAINS
 
             ELSE
                zero = 0
-               CALL mpi_send (zero, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err) 
+               CALL mpi_send (zero, 1, MPI_INTEGER, iwork, 1, p_comm_glb, p_err)
             ENDIF
 
          ENDDO
-         
+
          allocate (thisinfo%bsn_num_hru (thisinfo%ntotalcat))
          DO icat = 1, thisinfo%ntotalcat
             thisinfo%bsn_num_hru(icat) = hruall(icat)%nhru
@@ -209,7 +217,9 @@ CONTAINS
             allocate (thisinfo%hru_next (nhrumax,thisinfo%ntotalcat)); thisinfo%hru_next(:,:) = -1
             allocate (thisinfo%hru_plen (nhrumax,thisinfo%ntotalcat)); thisinfo%hru_plen(:,:) = 0.
             allocate (thisinfo%hru_lfac (nhrumax,thisinfo%ntotalcat)); thisinfo%hru_lfac(:,:) = 0.
-         
+
+            allocate (thisinfo%hru_fdstep (nstep,nhrumax,thisinfo%ntotalcat)); thisinfo%hru_fdstep(:,:,:) = 0.
+
             DO icat = 1, thisinfo%ntotalcat
                IF (thisinfo%lake_id(icat) <= 0) THEN
                   nhru = hruall(icat)%nhru
@@ -220,6 +230,7 @@ CONTAINS
                   thisinfo%hru_next (1:nhru,icat) = hruall(icat)%next
                   thisinfo%hru_plen (1:nhru,icat) = hruall(icat)%plen
                   thisinfo%hru_lfac (1:nhru,icat) = hruall(icat)%lfac
+                  thisinfo%hru_fdstep (1:nstep,1:nhru,icat) = hruall(icat)%fdstep
                ENDIF
             ENDDO
          ENDIF
@@ -232,6 +243,7 @@ CONTAINS
             IF (allocated(hruall(icat)%elva)) deallocate(hruall(icat)%elva)
             IF (allocated(hruall(icat)%plen)) deallocate(hruall(icat)%plen)
             IF (allocated(hruall(icat)%lfac)) deallocate(hruall(icat)%lfac)
+            IF (allocated(hruall(icat)%fdstep)) deallocate(hruall(icat)%fdstep)
          ENDDO
 
          IF (allocated(hruall)) deallocate(hruall)
@@ -241,7 +253,7 @@ CONTAINS
          levsize = catsize / nlev_max
 
          mesg(1:2) = (/p_iam_glb, 0/)
-         CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err) 
+         CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err)
 
          DO WHILE (.true.)
 
@@ -261,7 +273,7 @@ CONTAINS
             allocate (dir   (np,mp))
             allocate (hnd   (np,mp))
             allocate (elv   (np,mp))
-            
+
             CALL mpi_recv (catch, np*mp, MPI_INTEGER,  p_master_address, 1, p_comm_glb, p_stat, p_err)
             CALL mpi_recv (dir,   np*mp, MPI_INTEGER1, p_master_address, 1, p_comm_glb, p_stat, p_err)
             CALL mpi_recv (hnd,   np*mp, MPI_REAL4,    p_master_address, 1, p_comm_glb, p_stat, p_err)
@@ -279,19 +291,23 @@ CONTAINS
             allocate (hmask (np,mp))
             allocate (hunit (np,mp))
 
-            hmask = (catch == catnum) 
+            hmask = (catch == catnum)
             IF (any(hmask)) THEN
                IF (lakeid <= 0) THEN
                   CALL divide_hillslope_into_hydrounits ( lakeid, &
-                     np, mp, dir, hnd, area, hmask, levsize, hunit) 
+                     np, mp, dir, hnd, area, hmask, levsize, hunit)
                ELSE
                   CALL divide_lake (lakeid, np, mp, area, hmask, lakecellsize, hunit)
                ENDIF
+            ELSE
+               write(*,*) 'null catchment :', catnum, lakeid, imin, imax, jmin, jmax, catch
+               CALL mpi_abort (p_comm_glb, errorcode, p_err)
             ENDIF
 
+            minnum = minval(hunit,mask=hmask)
             maxnum = maxval(hunit,mask=hmask)
 
-            allocate (npxlhu (0:maxnum));  npxlhu(:) = 0
+            allocate (npxlhu (minnum:maxnum));  npxlhu(:) = 0
             DO j = 1, mp
                DO i = 1, np
                   IF (hmask(i,j)) THEN
@@ -300,16 +316,19 @@ CONTAINS
                ENDDO
             ENDDO
 
-            nhru = count(npxlhu > 0)
+            nhru = maxnum - minnum + 1
 
             IF (lakeid <= 0) THEN
 
-               allocate (areahu (0:maxnum));  areahu(:) = 0.
-               allocate (handhu (0:maxnum));  handhu(:) = 0.
-               allocate (elvahu (0:maxnum));  elvahu(:) = 0.
-               allocate (nexthu (0:maxnum));  nexthu(:) = -1
-               allocate (plenhu (0:maxnum));  plenhu(:) = 0.
-               allocate (lfachu (0:maxnum));  lfachu(:) = 0. 
+               allocate (indxhu (minnum:maxnum));  indxhu(:) = -1
+               allocate (areahu (minnum:maxnum));  areahu(:) = 0.
+               allocate (handhu (minnum:maxnum));  handhu(:) = 0.
+               allocate (elvahu (minnum:maxnum));  elvahu(:) = 0.
+               allocate (nexthu (minnum:maxnum));  nexthu(:) = -1
+               allocate (plenhu (minnum:maxnum));  plenhu(:) = 0.
+               allocate (lfachu (minnum:maxnum));  lfachu(:) = 0.
+
+               allocate (fdstep (nstep, minnum:maxnum))
 
                npxlhu(:) = 0
 
@@ -392,7 +411,7 @@ CONTAINS
                                  ENDIF
                               ENDIF
 
-                              IF ((dir(i,j) == 1) .or. (dir(i,j) == 16)) THEN 
+                              IF ((dir(i,j) == 1) .or. (dir(i,j) == 16)) THEN
                                  lfachu(unum) = lfachu(unum) + dlon(i+imin-1)
                               ELSEIF ((dir(i,j) == 4) .or. (dir(i,j) == 64)) THEN
                                  lfachu(unum) = lfachu(unum) + dlat(i+imin-1)
@@ -407,63 +426,58 @@ CONTAINS
                   ENDDO
                ENDDO
 
-               WHERE (npxlhu > 0)
-                  handhu = handhu / npxlhu
-                  elvahu = elvahu / npxlhu
-                  plenhu = plenhu / npxlhu
-               endwhere 
+               handhu = handhu / npxlhu
+               elvahu = elvahu / npxlhu
+               plenhu = plenhu / npxlhu
 
                IF (count(nexthu == -2) > 1) THEN
                   write(*,*) 'Warning: more than one lowest hydro unit in ', catnum, imin, imax, jmin, jmax
                   CALL mpi_abort (p_comm_glb, errorcode, p_err)
                ENDIF
 
-            ENDIF
 
-            IF (count(hmask) <= 0) write(*,*) catnum, lakeid, imin, imax, jmin, jmax, catch
+               DO iu = minnum, maxnum
+
+                  npxl = count(hmask .and. (hunit == iu))
+
+                  allocate (hdpix (npxl))
+                  allocate (order (npxl))
+
+                  hdpix = pack(hnd, mask = hmask .and. (hunit == iu))
+                  CALL quicksort (npxl, hdpix, order)
+
+                  DO is = 1, nstep
+                     fdstep(is,iu) = hdpix(ceiling(real(is*npxl)/nstep)) - hdpix(1)
+                  ENDDO
+
+                  deallocate (hdpix)
+                  deallocate (order)
+               ENDDO
+
+            ENDIF
 
             elvacat = sum(elv, mask = hmask) / count(hmask)
 
             mesg(1:2) = (/p_iam_glb, catnum/)
-            CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err) 
+            CALL mpi_send (mesg(1:2), 2, MPI_INTEGER, p_master_address, 0, p_comm_glb, p_err)
 
-            CALL mpi_send (hunit, np*mp, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err) 
+            CALL mpi_send (hunit, np*mp, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err)
 
-            CALL mpi_send (nhru, 1, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err) 
+            CALL mpi_send (nhru, 1, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err)
 
             IF (lakeid <= 0) THEN
-
-               allocate (mask (0:maxnum))
-
-               mask = npxlhu > 0
-
-               allocate (datar (nhru))
-               allocate (datai (nhru))
-
-               datai(1:nhru) = pack( (/(i,i=0,maxnum)/), mask)
-               CALL mpi_send (datai(1:nhru), nhru, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err) 
-
-               datar(1:nhru) = pack(areahu, mask)
-               CALL mpi_send (datar(1:nhru), nhru, MPI_REAL4, p_master_address, 2, p_comm_glb, p_err) 
-
-               datai(1:nhru) = pack(nexthu, mask)
-               CALL mpi_send (datai(1:nhru), nhru, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err) 
-
-               datar(1:nhru) = pack(handhu, mask)
-               CALL mpi_send (datar(1:nhru), nhru, MPI_REAL4, p_master_address, 2, p_comm_glb, p_err) 
-
-               datar(1:nhru) = pack(elvahu, mask)
-               CALL mpi_send (datar(1:nhru), nhru, MPI_REAL4, p_master_address, 2, p_comm_glb, p_err) 
-
-               datar(1:nhru) = pack(plenhu, mask)
-               CALL mpi_send (datar(1:nhru), nhru, MPI_REAL4, p_master_address, 2, p_comm_glb, p_err) 
-
-               datar(1:nhru) = pack(lfachu, mask)
-               CALL mpi_send (datar(1:nhru), nhru, MPI_REAL4, p_master_address, 2, p_comm_glb, p_err) 
-
+               indxhu = (/(i,i=minnum,maxnum)/)
+               CALL mpi_send (indxhu, nhru, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err)
+               CALL mpi_send (areahu, nhru, MPI_REAL4,   p_master_address, 2, p_comm_glb, p_err)
+               CALL mpi_send (nexthu, nhru, MPI_INTEGER, p_master_address, 2, p_comm_glb, p_err)
+               CALL mpi_send (handhu, nhru, MPI_REAL4,   p_master_address, 2, p_comm_glb, p_err)
+               CALL mpi_send (elvahu, nhru, MPI_REAL4,   p_master_address, 2, p_comm_glb, p_err)
+               CALL mpi_send (plenhu, nhru, MPI_REAL4,   p_master_address, 2, p_comm_glb, p_err)
+               CALL mpi_send (lfachu, nhru, MPI_REAL4,   p_master_address, 2, p_comm_glb, p_err)
+               CALL mpi_send (fdstep, nstep*nhru, MPI_REAL4, p_master_address, 2, p_comm_glb, p_err)
             ENDIF
 
-            CALL mpi_send (elvacat, 1, MPI_REAL4, p_master_address, 2, p_comm_glb, p_err) 
+            CALL mpi_send (elvacat, 1, MPI_REAL4, p_master_address, 2, p_comm_glb, p_err)
 
             IF (allocated (catch) ) deallocate (catch)
             IF (allocated (dir  ) ) deallocate (dir  )
@@ -480,9 +494,7 @@ CONTAINS
             IF (allocated (nexthu)) deallocate (nexthu)
             IF (allocated (plenhu)) deallocate (plenhu)
             IF (allocated (lfachu)) deallocate (lfachu)
-            IF (allocated (mask)  ) deallocate (mask)
-            IF (allocated (datar) ) deallocate (datar)
-            IF (allocated (datai) ) deallocate (datai)
+            IF (allocated (fdstep)) deallocate (fdstep)
 
             IF (allocated (route) ) deallocate (route)
             IF (allocated (hdnxt) ) deallocate (hdnxt)
@@ -491,7 +503,7 @@ CONTAINS
          ENDDO
 
       ENDIF
-         
+
       CALL mpi_barrier (p_comm_glb, p_err)
 
    END SUBROUTINE get_hillslope_hydrounits
@@ -524,7 +536,7 @@ CONTAINS
       real    (kind = 4), intent(in) :: levsize  ! max level size
 
       ! hillslope units
-      integer (kind = 4), intent(inout) :: hunit (np,mp)    
+      integer (kind = 4), intent(inout) :: hunit (np,mp)
 
       integer (kind = 4) :: nunit, iunit, junit, unit_next, unext
 
@@ -539,7 +551,7 @@ CONTAINS
 
       logical :: msk   (np,mp)
       integer (kind = 4) :: order2d (np,mp)
-      integer (kind = 4) :: hsgrp   (np,mp)    
+      integer (kind = 4) :: hsgrp   (np,mp)
 
       real (kind = 4) :: harea, area_this
       real (kind = 4), allocatable :: area_unit(:)
@@ -547,7 +559,7 @@ CONTAINS
       logical :: found
       integer (kind = 4) :: fstloc, inb, jnb
 
-      integer (kind = 4) :: hdown (np,mp)    
+      integer (kind = 4) :: hdown (np,mp)
       integer (kind = 4) :: inode, nnode
       integer (kind = 4), allocatable :: route (:, :)
 
@@ -558,25 +570,25 @@ CONTAINS
       integer (kind = 4), allocatable :: iunit_next (:)
       integer (kind = 4) :: nisland
 
-      IF (lakeid == 0) THEN 
+      IF (lakeid == 0) THEN
          ! lakeid = 0 refers to catchments with river pixels (hnd = 0)
          msk = hmask .and. (hnd > 0)
       ELSE
          ! lakeid < 0 refers to lake upstream areas without river pixels (hnd = 0)
-         msk = hmask 
+         msk = hmask
       ENDIF
 
-      WHERE (hmask) 
+      WHERE (hmask)
          hunit = 0
       END WHERE
-      WHERE (msk)   
+      WHERE (msk)
          hunit = -1
       END WHERE
 
       harea = sum(area, mask=msk)
 
       IF (harea < levsize * 1.2) THEN
-         WHERE (msk) 
+         WHERE (msk)
             hunit = 1
          END WHERE
       ELSE
@@ -595,7 +607,7 @@ CONTAINS
          order1d = (/ (ipxl, ipxl = 1, npxl) /)
 
          CALL quicksort (npxl, h1d, order1d)
-         
+
          order1d(order1d) = (/ (ipxl, ipxl = 1, npxl) /)
          order2d = unpack(order1d, msk, -1)
 
@@ -612,7 +624,7 @@ CONTAINS
             DO j = 1, mp
                DO i = 1, np
                   CALL nextij (i,j, dir(i,j),inext,jnext, is_local = .true.)
-                  IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN 
+                  IF ((inext >= 1) .and. (inext <= np) .and. (jnext >= 1) .and. (jnext <= mp)) THEN
                      IF (.not. hmask(inext,jnext)) THEN
                         hunit(i,j) = 1
                         area_this = area_this + area(i,j)
@@ -624,7 +636,7 @@ CONTAINS
                ENDDO
             ENDDO
          ENDIF
-            
+
          IF (.not. any(hmask .and. (hunit == -1))) THEN
             RETURN
          ENDIF
@@ -634,7 +646,7 @@ CONTAINS
          DO WHILE (any(hmask .and. (hunit == -1)))
 
             nunit = nunit + 1
-         
+
             ! find first pixel.
             DO ipxl = fstloc, npxl
                i = ij_sorted(1,ipxl)
@@ -661,7 +673,7 @@ CONTAINS
             route(:,1) = (/i, j/)
 
             DO WHILE (area_this < levsize)
-               
+
                found = .false.
 
                ipxl = order2d(route(1,1),route(2,1))
@@ -671,7 +683,7 @@ CONTAINS
                   i = route(1,inode)
                   j = route(2,inode)
 
-                  ipxl = min(order2d(i,j), ipxl) 
+                  ipxl = min(order2d(i,j), ipxl)
 
                   DO jnb = max(j-1,1), min(j+1,mp)
                      DO inb = max(i-1,1), min(i+1,np)
@@ -732,7 +744,7 @@ CONTAINS
                         EXIT
                      ELSE
                         ipxl = ipxl + 1
-                     ENDIF 
+                     ENDIF
                   ENDDO
 
                ENDIF
@@ -748,7 +760,7 @@ CONTAINS
                      route(:,nnode) = (/i, j/)
                      hunit(i,j) = nunit
                      area_this = area_this + area(i,j)
-                        
+
                      CALL nextij (i,j, dir(i,j),inext,jnext, is_local = .true.)
                      i = inext
                      j = jnext
@@ -759,7 +771,7 @@ CONTAINS
                ENDIF
 
             ENDDO
-               
+
             DO WHILE ((fstloc < npxl) .and. (hunit(ij_sorted(1,fstloc),ij_sorted(2,fstloc)) /= -1))
                fstloc = fstloc + 1
             ENDDO
@@ -938,7 +950,7 @@ CONTAINS
          DO iunit = 1, nunit
             IF (area_unit(iunit) > 0) THEN
                junit = junit + 1
-               WHERE (hmask .and. (hunit == iunit)) 
+               WHERE (hmask .and. (hunit == iunit))
                   hunit = junit
                END WHERE
                WHERE (iunit_next == iunit)
@@ -957,7 +969,7 @@ CONTAINS
                .and. all(iunit_next(1:nunit) /= iunit) &
                .and. (area_unit(iunit) < levsize * 0.1)) THEN
                nisland = nisland + 1
-               WHERE (hmask .and. (hunit == iunit)) 
+               WHERE (hmask .and. (hunit == iunit))
                   hunit = -1
                END WHERE
             ENDIF
@@ -970,16 +982,16 @@ CONTAINS
                   .and. all(iunit_next(1:nunit) /= iunit) &
                   .and. (area_unit(iunit) < levsize * 0.1))) THEN
                   junit = junit + 1
-                  WHERE (hmask .and. (hunit == iunit)) 
+                  WHERE (hmask .and. (hunit == iunit))
                      hunit = junit
                   END WHERE
                ENDIF
             ENDDO
 
-            WHERE (hmask .and. (hunit > 0  )) 
+            WHERE (hmask .and. (hunit > 0  ))
                hunit = hunit + 1
             END WHERE
-            WHERE (hmask .and. (hunit == -1)) 
+            WHERE (hmask .and. (hunit == -1))
                hunit = 1
             END WHERE
          ENDIF
@@ -989,7 +1001,7 @@ CONTAINS
 
          deallocate (route)
 
-         deallocate (h1d    ) 
+         deallocate (h1d    )
          deallocate (order1d)
 
          deallocate (ij_sorted)
@@ -997,7 +1009,7 @@ CONTAINS
          deallocate (is_neighbour)
          deallocate (small_units )
 
-      ENDIF 
+      ENDIF
 
    END SUBROUTINE divide_hillslope_into_hydrounits
 
@@ -1012,7 +1024,7 @@ CONTAINS
       real   (kind=4), intent(in) :: area (np,mp), lakecellsize
       logical,         intent(in) :: hmask(np,mp)
 
-      integer(kind=4), intent(inout) :: hunit(np,mp)    
+      integer(kind=4), intent(inout) :: hunit(np,mp)
 
       ! Local Variables
       integer(kind=4) :: nplake, nlakeelm, iplake, i, j
@@ -1042,7 +1054,7 @@ CONTAINS
       CALL cvt (lakeid, nplake, samplepoints, nlakeelm, lakeindex)
 
       hunit_ = hunit
-      hunit  = unpack(lakeindex, mask = hmask, field = hunit_) 
+      hunit  = unpack(lakeindex, mask = hmask, field = hunit_)
 
       deallocate (samplepoints)
       deallocate (lakeindex)

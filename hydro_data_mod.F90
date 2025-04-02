@@ -70,6 +70,7 @@ MODULE hydro_data_mod
       integer (kind=4), allocatable :: hru_next (:,:)
       real    (kind=4), allocatable :: hru_plen (:,:)
       real    (kind=4), allocatable :: hru_lfac (:,:)
+      real    (kind=4), allocatable :: hru_fdstep (:,:,:)
 
       ! basin information
       integer (kind=4) :: icatdsp

@@ -2,7 +2,7 @@ MODULE output_mod
 
 CONTAINS
 
-   SUBROUTINE output_block_info (nhrumax)
+   SUBROUTINE output_block_info (nhrumax, nstep)
 
       USE task_mod
       USE hydro_data_mod
@@ -11,6 +11,7 @@ CONTAINS
       IMPLICIT NONE
 
       integer (kind=4), intent(in) :: nhrumax
+      integer (kind=4), intent(in) :: nstep
 
       integer :: iblk, jblk
       character(len=256) :: mkdirname, filename
@@ -46,6 +47,8 @@ CONTAINS
 
             CALL ncio_define_dimension (filename, 'basin', thisinfo%ntotalcat)
             CALL ncio_define_dimension (filename, 'nswe' , 4)
+            CALL ncio_define_dimension (filename, 'step' , nstep)
+
             CALL ncio_write_serial (filename, 'bsn_index', thisinfo%bsn_index, 'basin', compress = 1)
             CALL ncio_write_serial (filename, 'lake_id'  , thisinfo%lake_id  , 'basin', compress = 1)
             CALL ncio_write_serial (filename, 'bsn_elva' , thisinfo%bsn_elva,  'basin', compress = 1)
@@ -67,13 +70,16 @@ CONTAINS
             CALL ncio_write_serial (filename, 'hru_plen' , thisinfo%hru_plen,  'hydrounit', 'basin', compress = 1)
             CALL ncio_write_serial (filename, 'hru_lfac' , thisinfo%hru_lfac,  'hydrounit', 'basin', compress = 1)
 
+            CALL ncio_write_serial (filename, 'hru_fdstep' , thisinfo%hru_fdstep,  &
+               'step', 'hydrounit', 'basin', compress = 1)
+
          ENDIF
 
       ENDIF
 
    END SUBROUTINE output_block_info
 
-   SUBROUTINE output_result (nhrumax, nnbmax)
+   SUBROUTINE output_result (nhrumax, nnbmax, nstep)
 
       USE task_mod
       USE hydro_data_mod
@@ -83,6 +89,7 @@ CONTAINS
 
       integer (kind=4), intent(in) :: nhrumax
       integer (kind=4), intent(in) :: nnbmax
+      integer (kind=4), intent(in) :: nstep
 
       integer (kind=4) :: np, mp
       real    (kind=8), allocatable :: longitude(:)
@@ -192,7 +199,7 @@ CONTAINS
          CALL ncio_define_dimension (filename, 'catchment', outinfo%ntotalcat)
          CALL ncio_define_dimension (filename, 'hydrounit', nhrumax)
          CALL ncio_define_dimension (filename, 'neighbour', nnbmax)
-         CALL ncio_define_dimension (filename, 'ncds', 2)
+         CALL ncio_define_dimension (filename, 'step', nstep)
 
          ! ----- output : number of hydro units in a basin -----
          allocate(outinfo%bsn_num_hru (outinfo%ntotalcat))
@@ -304,6 +311,20 @@ CONTAINS
 
          CALL ncio_write_serial (filename, 'hydrounit_facelen', outinfo%hru_lfac, &
             'hydrounit', 'catchment', compress = 1)
+
+         ! ----- output : hydro unit flood area profile -----
+         allocate(outinfo%hru_fdstep (nstep, nhrumax, outinfo%ntotalcat)); outinfo%hru_fdstep(:,:,:) = 0.
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            IF (nthis > 0) nhru  = size(thisinfo%hru_fdstep,2)
+            IF (nthis > 0) outinfo%hru_fdstep(:,1:nhru,dsp+1:dsp+nthis) = thisinfo%hru_fdstep
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'hydrounit_flood_step', outinfo%hru_fdstep, &
+            'step', 'hydrounit', 'catchment', compress = 1)
 
          ! ----- output : river length -----
          allocate(outinfo%riv_len (outinfo%ntotalcat));   outinfo%riv_len(:) = spval

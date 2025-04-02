@@ -18,7 +18,7 @@ PROGRAM main
    real    (kind=4) :: def_catsize
    real    (kind=4) :: def_catsizemin   = 1.0
    real    (kind=4) :: def_lakecellsize = -1.e36
-   integer (kind=4) :: def_num_profile  = 10
+   integer (kind=4) :: def_nstep_flood  = 10
    integer (kind=4) :: def_nlev_max     = 10
 
    integer (kind = 4) :: narg
@@ -33,7 +33,7 @@ PROGRAM main
       def_hydro_dir,    def_lake_dir,    def_output_dir,   def_casename,   &
       def_storage_type, def_catsize,     def_lakecellsize, def_catsizemin, &
       def_west,         def_east,        def_south,        def_north,      &
-      def_nlev_max,     def_num_profile, def_include_all_upstream
+      def_nlev_max,     def_nstep_flood, def_include_all_upstream
 
    CALL task_init  ()
 
@@ -72,7 +72,7 @@ PROGRAM main
    CALL mpi_bcast (def_south,                 1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
    CALL mpi_bcast (def_north,                 1,     MPI_REAL4, p_master_address, p_comm_glb, p_err)
    CALL mpi_bcast (def_nlev_max,              1,   MPI_INTEGER, p_master_address, p_comm_glb, p_err)
-   CALL mpi_bcast (def_num_profile,           1,   MPI_INTEGER, p_master_address, p_comm_glb, p_err)
+   CALL mpi_bcast (def_nstep_flood,           1,   MPI_INTEGER, p_master_address, p_comm_glb, p_err)
    CALL mpi_bcast (def_include_all_upstream,  1,   MPI_LOGICAL, p_master_address, p_comm_glb, p_err)
 
    CALL mpi_bcast (has_predefined_rivermouth, 1, MPI_LOGICAL, p_master_address, p_comm_glb, p_err)
@@ -123,7 +123,7 @@ PROGRAM main
       CALL get_catchment (def_catsize)
 
       ! Step 3: Dividing catchment into hillslopes and hydrounits.
-      CALL get_hillslope_hydrounits (def_catsize, def_lakecellsize, def_nlev_max, nhrumax)
+      CALL get_hillslope_hydrounits (def_catsize, def_lakecellsize, def_nlev_max, def_nstep_flood, nhrumax)
 
       IF (p_is_master) THEN
          ntotalall = ntotalall + thisinfo%ntotalcat
@@ -131,7 +131,7 @@ PROGRAM main
       CALL mpi_bcast (ntotalall, 1, MPI_INTEGER, p_master_address, p_comm_glb, p_err)
 
       IF (p_is_master .and. (trim(def_storage_type) == 'block')) THEN
-         CALL output_block_info (nhrumax)
+         CALL output_block_info (nhrumax, def_nstep_flood)
          CALL flush_blocks (output = .true.)
       ENDIF
 
@@ -145,7 +145,7 @@ PROGRAM main
    CALL get_basin_neighbour (ntotalall, nnbmax)
 
    ! Step 5: Writing out results.
-   CALL output_result (nhrumax, nnbmax)
+   CALL output_result (nhrumax, nnbmax, def_nstep_flood)
 
    CALL free_memory ()
 
