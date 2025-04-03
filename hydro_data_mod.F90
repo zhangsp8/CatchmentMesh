@@ -323,22 +323,20 @@ CONTAINS
 
                   IF (.not. fexists) THEN
                      CALL ncio_create_file (filename)
-                     CALL ncio_define_dimension (filename, 'latitude',  nbox)
-                     CALL ncio_define_dimension (filename, 'longitude', mbox)
-                     CALL ncio_write_serial (filename, 'latitude',  blks(iblk,jblk)%lat, &
-                        'latitude' )
-                     CALL ncio_write_serial (filename, 'longitude', blks(iblk,jblk)%lon, &
-                        'longitude')
+                     CALL ncio_define_dimension (filename, 'lat',  nbox)
+                     CALL ncio_define_dimension (filename, 'lon', mbox)
+                     CALL ncio_write_serial (filename, 'lat', blks(iblk,jblk)%lat, 'lat')
+                     CALL ncio_write_serial (filename, 'lon', blks(iblk,jblk)%lon, 'lon')
                      CALL ncio_write_serial (filename, 'elva', blks(iblk,jblk)%elv,  &
-                        'latitude', 'longitude', compress = 1)
+                        'lat', 'lon', compress = 1)
                   ENDIF
 
                   CALL ncio_write_serial (filename, 'icatchment2d', blks(iblk,jblk)%icat, &
-                     'latitude', 'longitude', compress = 1)
+                     'lat', 'lon', compress = 1)
                   CALL ncio_write_serial (filename, 'hand', blks(iblk,jblk)%hnd, &
-                     'latitude', 'longitude', compress = 1)
+                     'lat', 'lon', compress = 1)
                   CALL ncio_write_serial (filename, 'ihydrounit2d', blks(iblk,jblk)%hunit, &
-                     'latitude', 'longitude', compress = 1)
+                     'lat', 'lon', compress = 1)
 
                ENDIF
 

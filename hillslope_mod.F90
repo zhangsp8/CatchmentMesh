@@ -487,6 +487,7 @@ CONTAINS
             IF (allocated (hunit) ) deallocate (hunit)
             IF (allocated (hmask) ) deallocate (hmask)
 
+            IF (allocated (indxhu)) deallocate (indxhu)
             IF (allocated (areahu)) deallocate (areahu)
             IF (allocated (npxlhu)) deallocate (npxlhu)
             IF (allocated (handhu)) deallocate (handhu)

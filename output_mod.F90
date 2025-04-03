@@ -33,14 +33,12 @@ CONTAINS
 
          IF (.not. fexists) THEN
             CALL ncio_create_file (filename)
-            CALL ncio_define_dimension (filename, 'latitude',  nbox)
-            CALL ncio_define_dimension (filename, 'longitude', mbox)
-            CALL ncio_write_serial (filename, 'latitude',  blks(iblk,jblk)%lat, &
-               'latitude' )
-            CALL ncio_write_serial (filename, 'longitude', blks(iblk,jblk)%lon, &
-               'longitude')
+            CALL ncio_define_dimension (filename, 'lat',  nbox)
+            CALL ncio_define_dimension (filename, 'lon', mbox)
+            CALL ncio_write_serial (filename, 'lat', blks(iblk,jblk)%lat, 'lat')
+            CALL ncio_write_serial (filename, 'lon', blks(iblk,jblk)%lon, 'lon')
             CALL ncio_write_serial (filename, 'elva', blks(iblk,jblk)%elv,  &
-               'latitude', 'longitude', compress = 1)
+               'lat', 'lon', compress = 1)
          ENDIF
 
          IF (thisinfo%ntotalcat > 0) THEN
@@ -159,21 +157,21 @@ CONTAINS
                np, mp, longitude = longitude, latitude = latitude, &
                icat = catch, hnd = hnd, elv = elv, hunit = hunit)
 
-            CALL ncio_define_dimension (filename, 'latitude', np)
-            CALL ncio_define_dimension (filename, 'longitude', mp)
-            CALL ncio_write_serial (filename, 'latitude', latitude,  'latitude')
-            CALL ncio_write_serial (filename, 'longitude', longitude, 'longitude')
+            CALL ncio_define_dimension (filename, 'lat', np)
+            CALL ncio_define_dimension (filename, 'lon', mp)
+            CALL ncio_write_serial (filename, 'lat', latitude,  'lat')
+            CALL ncio_write_serial (filename, 'lon', longitude, 'lon')
 
-            CALL ncio_put_attr_str (filename, 'latitude', 'long_name', 'latitude')
-            CALL ncio_put_attr_str (filename, 'latitude', 'units', 'degrees_north')
-            CALL ncio_put_attr_str (filename, 'longitude', 'long_name', 'longitude')
-            CALL ncio_put_attr_str (filename, 'longitude', 'units', 'degrees_east')
+            CALL ncio_put_attr_str (filename, 'lat', 'long_name', 'latitude')
+            CALL ncio_put_attr_str (filename, 'lat', 'units', 'degrees_north')
+            CALL ncio_put_attr_str (filename, 'lon', 'long_name', 'longitude')
+            CALL ncio_put_attr_str (filename, 'lon', 'units', 'degrees_east')
 
 
-            CALL ncio_write_serial (filename, 'icatchment2d', catch, 'latitude', 'longitude', compress = 1)
-            CALL ncio_write_serial (filename, 'hand',   hnd  , 'latitude', 'longitude', compress = 1)
-            CALL ncio_write_serial (filename, 'elva',   elv  , 'latitude', 'longitude', compress = 1)
-            CALL ncio_write_serial (filename, 'ihydrounit2d', hunit, 'latitude', 'longitude', compress = 1)
+            CALL ncio_write_serial (filename, 'icatchment2d', catch, 'lat', 'lon', compress = 1)
+            CALL ncio_write_serial (filename, 'hand', hnd, 'lat', 'lon', compress = 1)
+            CALL ncio_write_serial (filename, 'elva', elv, 'lat', 'lon', compress = 1)
+            CALL ncio_write_serial (filename, 'ihydrounit2d', hunit, 'lat', 'lon', compress = 1)
 
             deallocate (latitude )
             deallocate (longitude)
