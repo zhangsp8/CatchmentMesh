@@ -83,6 +83,9 @@ MODULE hydro_data_mod
       real    (kind=4), allocatable :: bsn_len_bdr  (:,:)
       real    (kind=4), allocatable :: bsn_elva       (:)
 
+      integer (kind=4), allocatable :: ilat_outlet (:)
+      integer (kind=4), allocatable :: ilon_outlet (:)
+
       ! lake information
       integer (kind=4), allocatable :: lake_id (:)
 
@@ -910,6 +913,9 @@ CONTAINS
          IF (allocated (thisinfo%bsn_idx_nbr   )) deallocate (thisinfo%bsn_idx_nbr   )
          IF (allocated (thisinfo%bsn_len_bdr   )) deallocate (thisinfo%bsn_len_bdr   )
          IF (allocated (thisinfo%bsn_elva      )) deallocate (thisinfo%bsn_elva      )
+
+         IF (allocated (thisinfo%ilat_outlet)) deallocate (thisinfo%ilat_outlet)
+         IF (allocated (thisinfo%ilon_outlet)) deallocate (thisinfo%ilon_outlet)
 
          IF (allocated (thisinfo%lake_id)) deallocate (thisinfo%lake_id)
 

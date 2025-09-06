@@ -53,6 +53,9 @@ CONTAINS
             CALL ncio_write_serial (filename, 'bsn_downstream' , thisinfo%bsn_downstream,  'basin', compress = 1)
             CALL ncio_write_serial (filename, 'bsn_nswe' , thisinfo%bsn_nswe,  'nswe', 'basin', compress = 1)
 
+            CALL ncio_write_serial (filename, 'ilat_outlet', thisinfo%ilat_outlet, 'basin', compress = 1)
+            CALL ncio_write_serial (filename, 'ilon_outlet', thisinfo%ilon_outlet, 'basin', compress = 1)
+
             CALL ncio_define_dimension (filename, 'river', thisinfo%nrivseg)
             CALL ncio_write_serial (filename, 'riv_len', thisinfo%riv_len, 'river', compress = 1)
             CALL ncio_write_serial (filename, 'riv_elv', thisinfo%riv_elv, 'river', compress = 1)
@@ -432,6 +435,30 @@ CONTAINS
          ENDDO
 
          CALL ncio_write_serial (filename, 'lake_id', outinfo%lake_id, 'catchment', compress = 1)
+
+         ! ----- output : outlet latitude index -----
+         allocate(outinfo%ilat_outlet (outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            IF (nthis > 0) outinfo%ilat_outlet(dsp+1:dsp+nthis) = thisinfo%ilat_outlet
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'ilat_outlet', outinfo%ilat_outlet, 'catchment', compress = 1)
+
+         ! ----- output : outlet longitude index -----
+         allocate(outinfo%ilon_outlet (outinfo%ntotalcat))
+         thisinfo => allinfo;  dsp = 0
+         DO WHILE (associated(thisinfo))
+            nthis = thisinfo%ntotalcat
+            IF (nthis > 0) outinfo%ilon_outlet(dsp+1:dsp+nthis) = thisinfo%ilon_outlet
+            dsp = dsp + nthis
+            thisinfo => thisinfo%next
+         ENDDO
+
+         CALL ncio_write_serial (filename, 'ilon_outlet', outinfo%ilon_outlet, 'catchment', compress = 1)
 
       ENDIF
 

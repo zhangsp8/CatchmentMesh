@@ -8,6 +8,8 @@ MODULE catchment_mod
    type catinfo_typ
       integer (kind=4), allocatable :: cid    (:)  ! catchment id
       integer (kind=4), allocatable :: lid    (:)  ! lake id
+      integer (kind=4), allocatable :: ilat_o (:)  ! outlet latitude index
+      integer (kind=4), allocatable :: ilon_o (:)  ! outlet longitude index
       integer (kind=4), allocatable :: nswe (:,:)  ! boundaries: north, south, west, east
       type(catinfo_typ), pointer :: next
    END type
@@ -62,6 +64,8 @@ CONTAINS
 
             allocate (networkinfo%cid    (ncat))
             allocate (networkinfo%lid    (ncat))
+            allocate (networkinfo%ilat_o (ncat))
+            allocate (networkinfo%ilon_o (ncat))
             allocate (networkinfo%nswe (4,ncat))
 
             networkinfo%nswe(:,:) = 0
@@ -76,7 +80,12 @@ CONTAINS
                irivseg = irivseg + 1
                head = head + 1
 
-               is_lake = (get_lake(thisinfo%riv_pix(1,head),thisinfo%riv_pix(2,head)) > 0)
+               outlet = thisinfo%riv_pix(1:2,head)
+
+               networkinfo%ilat_o(irivseg) = outlet(1)
+               networkinfo%ilon_o(irivseg) = outlet(2)
+
+               is_lake = (get_lake(outlet(1),outlet(2)) > 0)
 
                IF (.not. is_lake) THEN
 
@@ -140,8 +149,6 @@ CONTAINS
                   ! lake
 
                   ! 1. lake area.
-                  outlet = thisinfo%riv_pix(1:2,head)
-
                   lakeid = get_lake(outlet(1), outlet(2))
 
                   nplake = 0
@@ -357,11 +364,17 @@ CONTAINS
             allocate (thisinfo%lake_id    (ncat))
             allocate (thisinfo%bsn_nswe (4,ncat))
 
+            allocate (thisinfo%ilat_outlet (ncat));    thisinfo%ilat_outlet = -1
+            allocate (thisinfo%ilon_outlet (ncat));    thisinfo%ilon_outlet = -1
+
             thisinfo%bsn_index(1:ncat) = (/(ic, ic = 1, ncat)/) + thisinfo%icatdsp
 
             nc = size(networkinfo%cid)
             thisinfo%lake_id   (1:nc) = networkinfo%lid
             thisinfo%bsn_nswe(:,1:nc) = networkinfo%nswe
+
+            thisinfo%ilat_outlet(1:nc) = networkinfo%ilat_o
+            thisinfo%ilon_outlet(1:nc) = networkinfo%ilon_o
 
             ic = nc
             thislake => networkinfo%next

@@ -1,5 +1,5 @@
 
-FF = /usr/bin/mpif90
+FF = mpif90
 FOPTS = -fdefault-real-8 -ffree-form -C -g -u -xcheck=stkovf \
 		-ffpe-trap=invalid,zero,overflow,underflow -fbounds-check \
 		-mcmodel=medium -fbacktrace -fdump-core -cpp -fopenmp
