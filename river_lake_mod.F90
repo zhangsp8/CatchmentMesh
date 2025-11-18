@@ -384,6 +384,34 @@ CONTAINS
 
                            CALL append_river (river, nriv, ij_this, icat+thisinfo%icatdsp)
 
+                           IF ((area < catsize) .and. (nbranch == 0)) THEN
+                              ! for small branches, extend river
+                              i = ij_this(1); j = ij_this(2)
+                              DO WHILE (.true.)
+                                 upa_up(:) = 0
+                                 DO idir = 1, 8
+                                    CALL nextij (i, j, ishftc(int(-128,1),idir), i_up, j_up)
+                                    IF (((i /= i_up) .or. (j /= j_up)) .and. within_region(i_up,j_up,.false.)) THEN
+                                       dir_this = get_dir(i_up,j_up)
+                                       IF (dir_this == ishftc(int(8,1),idir)) THEN
+                                          upa_up(idir) = get_upa(i_up,j_up)
+                                       ENDIF
+                                    ENDIF
+                                 ENDDO
+
+                                 IF (maxval(upa_up) > 0.5) THEN
+                                    idir = maxloc(upa_up, dim = 1)
+                                    CALL nextij (i, j, ishftc(int(-128,1),idir), i_up, j_up)
+
+                                    CALL append_river (river, nriv, (/i_up,j_up/), icat+thisinfo%icatdsp)
+
+                                    i = i_up; j = j_up
+                                 ELSE
+                                    EXIT
+                                 ENDIF
+                              ENDDO
+                           ENDIF
+
                            DO ibranch = 1, nbranch
                               idir = maxloc(upa_up, dim = 1)
                               CALL nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
