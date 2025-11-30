@@ -376,39 +376,11 @@ CONTAINS
 
                      IF ((area >= catsize) .or. (nbranch == 0)) THEN
 
-                        IF (area < catsize) THEN
-                           ! for small branches, extend river
-                           i = ij_this(1); j = ij_this(2)
-                           DO WHILE (.true.)
-                              upa_up(:) = 0
-                              DO idir = 1, 8
-                                 CALL nextij (i, j, ishftc(int(-128,1),idir), i_up, j_up)
-                                 IF (((i /= i_up) .or. (j /= j_up)) .and. within_region(i_up,j_up,.false.)) THEN
-                                    dir_this = get_dir(i_up,j_up)
-                                    IF (dir_this == ishftc(int(8,1),idir)) THEN
-                                       upa_up(idir) = get_upa(i_up,j_up)
-                                    ENDIF
-                                 ENDIF
-                              ENDDO
-
-                              IF (maxval(upa_up) > 0.5) THEN
-                                 idir = maxloc(upa_up, dim = 1)
-                                 CALL nextij (i, j, ishftc(int(-128,1),idir), i_up, j_up)
-
-                                 CALL append_river (river, nriv, (/i_up,j_up/), icat+thisinfo%icatdsp)
-
-                                 i = i_up; j = j_up
-                              ELSE
-                                 EXIT
-                              ENDIF
-                           ENDDO
-                        ENDIF
-
                         DO ibranch = 1, nbranch
                            idir = maxloc(upa_up, dim = 1)
                            CALL nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up1, j_up1)
 
-                           ! new river segment (CASE 4): large branch
+                           ! new river segment (CASE 3): large branch
 
                            CALL append_plist (mouthlist, ncat, i_up1, j_up1, check_exist = .false.)
 
@@ -419,13 +391,47 @@ CONTAINS
                            idir = maxloc(upa_up, dim = 1, mask=(upa_up<catsize))
                            CALL nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
 
-                           ! new river segment (CASE 3): add small branches
+                           ! new river segment (CASE 4): add small branches
 
                            CALL append_plist (mouthlist, ncat, i_up, j_up, check_exist = .false.)
 
                            area = area - upa_up(idir)
                            upa_up(idir) = 0
                         ENDDO
+
+                        IF (nbranch == 0) THEN
+                           ! for small branches, extend river
+                           IF (maxval(upa_up) > 0.5) THEN
+                              idir = maxloc(upa_up, dim = 1)
+                              CALL nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up, j_up)
+                              CALL append_river (river, nriv, (/i_up,j_up/), icat+thisinfo%icatdsp)
+
+                              i = i_up; j = j_up
+                              DO WHILE (.true.)
+                                 upa_up(:) = 0
+                                 DO idir = 1, 8
+                                    CALL nextij (i, j, ishftc(int(-128,1),idir), i_up, j_up)
+                                    IF (((i /= i_up) .or. (j /= j_up)) .and. within_region(i_up,j_up,.false.)) THEN
+                                       dir_this = get_dir(i_up,j_up)
+                                       IF (dir_this == ishftc(int(8,1),idir)) THEN
+                                          upa_up(idir) = get_upa(i_up,j_up)
+                                       ENDIF
+                                    ENDIF
+                                 ENDDO
+
+                                 IF (maxval(upa_up) > 0.5) THEN
+                                    idir = maxloc(upa_up, dim = 1)
+                                    CALL nextij (i, j, ishftc(int(-128,1),idir), i_up, j_up)
+
+                                    CALL append_river (river, nriv, (/i_up,j_up/), icat+thisinfo%icatdsp)
+
+                                    i = i_up; j = j_up
+                                 ELSE
+                                    EXIT
+                                 ENDIF
+                              ENDDO
+                           ENDIF
+                        ENDIF
 
                         EXIT
 
@@ -439,7 +445,7 @@ CONTAINS
                            idir = maxloc(upa_up, dim = 1)
                            CALL nextij (ij_this(1), ij_this(2), ishftc(int(-128,1),idir), i_up1, j_up1)
 
-                           ! new river segment (CASE 4): large branch
+                           ! new river segment (CASE 5): large branch
 
                            CALL append_plist (mouthlist, ncat, i_up1, j_up1, check_exist = .false.)
 
@@ -449,7 +455,7 @@ CONTAINS
                         rlen = rlen + dist_between (i_up, j_up, ij_this(1), ij_this(2))
 
                         IF (rlen > rlen_max) THEN
-                           ! new river segment (CASE 5): too long river
+                           ! new river segment (CASE 6): too long river
 
                            CALL append_plist (mouthlist, ncat, i_up, j_up, check_exist = .true.)
 
